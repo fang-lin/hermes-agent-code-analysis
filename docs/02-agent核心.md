@@ -156,17 +156,15 @@ Agent 与四个方向的组件交互：
 
 为什么这么多参数？因为 `AIAgent` 是一个被**三个完全不同的入口**使用的类——CLI 需要流式回调和中断支持，Gateway 需要平台身份和会话隔离，批量运行器需要轨迹保存和预算控制。与其拆成三个子类（引入继承复杂度），不如用一个大参数列表（配合合理的默认值）让调用方只传自己关心的部分。
 
-## Prompt Caching：省 75% 的钱
+## Prompt Caching：让重复的 token 不再重复付费
 
-### 问题
+每次调用模型 API，完整的消息序列（系统提示 + 历史对话 + 当前消息）都要从头发送。一个 Hermes 会话中，系统提示可能占 5,000-10,000 token（包含身份、记忆快照、技能指南、上下文文件等），但它在 20 轮对话中几乎不变——等于同样的内容付了 20 次钱。
 
-每次调用模型 API，系统提示词都要随消息一起发送。一个典型的 Hermes 会话，系统提示可能有 5,000-10,000 token（包含身份、记忆、技能指南、上下文文件等）。如果一个会话有 20 轮对话，这些 token 被重复发送 20 次——但每次内容都一样。
+Prompt Caching 是对这个浪费的应对。它不是 Hermes 发明的概念——Anthropic 的 API 原生支持 `cache_control` 标记，OpenRouter 对 Claude 模型也透传这个能力，本地推理引擎（vLLM、llama.cpp）天然支持 KV cache 前缀复用。Hermes 的工作是在 `agent/prompt_caching.py` 里实现一个**跨 Provider 通用的缓存标记策略**，让尽可能多的场景受益。
 
-部分 Provider 支持 Prompt Caching 来解决这个问题。以 Anthropic 为例，它允许标记消息的某些部分为"可缓存"。服务端会缓存这些前缀，后续请求如果前缀完全相同（byte-identical），就直接复用 KV cache，输入 token 按缓存价格计费（便宜 ~90%）。Claude 经 OpenRouter 调用时也支持类似的缓存机制。
+这个模块位于 Agent 核心和 Transport 层之间——它在消息发送给 Transport 的 `build_kwargs()` 之前，对 `api_messages` 注入 `cache_control` 标记（`run_agent.py:10195-10200`）。它是一个纯函数模块（`prompt_caching.py:8`："Pure functions -- no class state, no AIAgent dependency"），不持有任何状态，不依赖 AIAgent 的任何属性。
 
-### Hermes 的 system_and_3 策略
-
-`agent/prompt_caching.py` 实现了一个叫 "system_and_3" 的策略（`prompt_caching.py:1-8`）。以 Anthropic 的原生 API 为例，它允许最多 4 个 `cache_control` breakpoint，Hermes 这样分配：
+具体策略叫 "system_and_3"（`prompt_caching.py:1-8`）。以 Anthropic 为例，它允许最多 4 个 `cache_control` breakpoint，Hermes 这样分配：
 
 ```
 消息序列:
@@ -175,30 +173,26 @@ Agent 与四个方向的组件交互：
 ├─────────────────────────┤
 │ user message #1          │
 │ assistant response #1    │
-│ user message #2          │
-│ assistant response #2    │
-│ ...                      │
+│ ...（中间消息全部命中缓存）│
 │ user message #N-2        │ ← breakpoint 2
 │ assistant response #N-2  │ ← breakpoint 3
 │ user message #N-1        │ ← breakpoint 4（最新消息）
 └─────────────────────────┘
 ```
 
-核心代码只有 30 行（`prompt_caching.py:41-72`）：找到 system message 放一个 breakpoint，再找最后 3 条非 system 消息各放一个。效果是：系统提示 + 绝大部分历史对话都命中缓存，只有最新的一两条消息需要重新处理。
+为什么不把 4 个 breakpoint 全放在最新消息上？因为系统提示是最稳定的前缀——它在整个会话内不变，命中率接近 100%。如果不单独标记它，Provider 可能不知道从哪里开始缓存。最后 3 条消息的 breakpoint 形成一个滚动窗口，确保最近的上下文也被缓存。
 
-### 缓存命中率的守护
+一个替代方案是完全不做显式标记，依赖 Provider 的自动前缀匹配。但 Anthropic 的 API 要求显式标记才能启用缓存（这不是自动行为），所以 Hermes 必须主动做这一步。对于不支持 `cache_control` 的 Provider，这些标记会被忽略，不会产生副作用。
 
-光有 caching 标记不够——如果系统提示每次都变，缓存就是摆设。Hermes 做了几件事来守护命中率（`run_agent.py:10207-10239`）：
+但标记只是一半——如果系统提示每次都微妙变化，缓存就是摆设。Hermes 在多个层面守护前缀稳定性（`run_agent.py:10207-10239`）：
 
-1. **系统提示只构建一次**。`_cached_system_prompt` 在会话内不变（`run_agent.py:9814`），除非上下文被压缩（压缩会改变消息结构，不得不重建）。动态信息（如记忆检索结果）注入到**用户消息**而非系统提示，保持前缀稳定。
+- **系统提示只构建一次**（`run_agent.py:9814`），会话内不重建（除非上下文压缩改变了消息结构）。动态信息（如记忆检索结果）注入到**用户消息**而非系统提示——这就是前面讲的"双注入"策略的另一个动机。
+- **JSON 标准化**。工具调用参数做 `sort_keys=True, separators=(",", ":")`——同样的参数因序列化顺序不同会导致缓存 miss。这个优化对本地推理引擎的 KV cache 同样有效。
+- **空白清理**。消息内容 `.strip()`，消除无意义的空白差异。
 
-2. **JSON 标准化**。工具调用参数做 `sort_keys=True, separators=(",", ":")`——同样的参数不同序列化顺序会导致缓存 miss。
+如果缓存完全失效了会怎样？不会崩溃——只是退回到正常的全量计费，延迟和成本回到没有缓存时的水平。这是一个"有则更好，无则不损"的优化。
 
-3. **空白清理**。消息内容 `.strip()`，消除无意义的空白差异。
-
-### TTL 选择
-
-缓存有两种 TTL（`run_agent.py:1154-1167`）：5 分钟（默认）和 1 小时。1 小时 TTL 写入成本是 5 分钟的 1.6 倍，但对于间隔较长的会话（比如 Gateway 上的消息聊天），长 TTL 可以跨多次请求摊销缓存成本。用户通过 `config.yaml` 的 `prompt_caching.cache_ttl` 配置。
+缓存 TTL 可通过 `config.yaml` 的 `prompt_caching.cache_ttl` 配置（`run_agent.py:1154-1167`）：5 分钟（默认，写入成本低）或 1 小时（写入成本高 1.6 倍，但适合消息间隔较长的 Gateway 聊天场景）。
 
 ## 当 API 出错了：重试与退避
 
@@ -235,71 +229,52 @@ exhausted credential 冷却 1 小时后自动恢复 (credential_pool.py:73)
 
 为什么第一次不立刻切换？因为 429 可能只是瞬时的——Provider 的限流窗口可能在几秒内就重置。立刻切换 credential 反而浪费了一个本可以恢复的 key。
 
-## Credential Pool：多把钥匙的管理
+## Credential Pool：凭证的生命周期管理
 
-### 为什么需要凭证池？
+早期的 AI agent 通常只需要一个 API key——写在环境变量里，调用时取出来用，就这么简单。但当 Hermes 开始支持 OAuth 登录（Nous Portal 的 `hermes login`、Anthropic OAuth、GitHub Copilot OAuth）之后，情况变复杂了：OAuth token 有过期时间，需要用 refresh_token 换新的；同一个用户可能同时拥有 API key 和 OAuth token；团队可能共享多个 key 分摊配额。一个简单的 `os.getenv("API_KEY")` 不再够用。
 
-这不只是"多个 API key 轮流用"的问题。Hermes 面临的凭证场景比想象的复杂：
-
-- **OAuth token 有过期时间**。通过 `hermes login` 登录 Nous Portal 或 Anthropic OAuth 获取的 token 可能几小时后就失效，需要自动刷新（用 refresh_token 换新的 access_token），刷新失败时要优雅降级。
-- **同一个 Provider 可能有多个凭证**。团队共享多个 API key 分摊配额；或者用户同时有 OAuth token 和 API key，需要选择最合适的。
-- **凭证可能随时失效**。被限流（429）、余额不足（402）、key 被吊销（401）——每种失败需要不同的恢复策略。
-
-### 谁管理凭证池？
-
-重要的一点：**Credential Pool 不是 Agent 自己创建的**。凭证的发现和初始化由 CLI 层（`hermes_cli/auth.py`）或 Gateway 层在创建 Agent **之前**完成，然后通过 `credential_pool=pool` 参数注入给 Agent（`run_agent.py:898`）。Agent 只是凭证的使用者——它负责从池中选凭证、标记限流状态、触发 token 刷新，但不负责凭证从哪里来。
-
-### 四种轮转策略
-
-`agent/credential_pool.py` 实现了凭证池的核心逻辑（`credential_pool.py:59-68`）：
+Credential Pool（`agent/credential_pool.py`）就是为了管理这些复杂场景而生的。它是一个**带状态的凭证容器**，位于 Agent 核心和 LLM API 之间——每次 Agent 要调用模型时，不是直接拿一个固定的 key，而是问 Credential Pool "给我一个当前可用的凭证"。
 
 ```
-┌─────────────────────────────────────────┐
-│              Credential Pool             │
-│                                          │
-│  策略:                                   │
-│  ├ fill_first (默认) — 优先用高优先级的  │
-│  ├ round_robin — 每次选后轮转到队尾      │
-│  ├ random — 随机选可用凭证               │
-│  └ least_used — 选使用次数最少的         │
-│                                          │
-│  凭证状态:                               │
-│  ├ ok — 可用                             │
-│  ├ exhausted — 被限流，冷却中            │
-│  └ refreshing — OAuth token 刷新中       │
-│                                          │
-│  凭证来源:                               │
-│  ├ 环境变量 (OPENROUTER_API_KEY 等)      │
-│  ├ OAuth 存储 (Nous/Anthropic/Codex)     │
-│  └ 自定义 Provider 配置                  │
-└─────────────────────────────────────────┘
+┌────────────┐    ┌───────────────────────┐    ┌──────────┐
+│ CLI / GW   │───→│   Credential Pool     │    │ LLM API  │
+│            │创建│                       │    │          │
+│hermes_cli/ │    │  凭证 A (ok)    ←─选中─┼──→│ Anthropic│
+│auth.py     │    │  凭证 B (exhausted)   │    │ OpenAI   │
+│            │    │  凭证 C (refreshing)  │    │ ...      │
+└────────────┘    └───────────┬───────────┘    └──────────┘
+                              │
+                      AIAgent 使用（不拥有）
 ```
 
-每个凭证是一个 `PooledCredential` 对象（`credential_pool.py:91`），携带 provider、auth_type（`api_key` 或 `oauth`）、priority、access_token、refresh_token 等字段。OAuth 凭证（如 Nous Portal、Anthropic OAuth、Codex OAuth）会在接近过期时自动刷新（`credential_pool.py:575-735`）。
+一个常见的误解是 Credential Pool 由 Agent 管理。实际上，**池的创建和凭证的发现由 CLI 层（`hermes_cli/auth.py`）或 Gateway 层完成**，在 Agent 创建之前就准备好了，通过 `credential_pool=pool` 参数注入（`run_agent.py:898`）。Agent 只是消费者——它从池中选凭证、标记限流状态、触发 token 刷新，但不负责凭证从哪里来。这种"创建者和使用者分离"的设计让凭证的生命周期可以跨越多个 Agent 实例（Gateway 模式下很重要）。
 
-`fill_first` 是默认策略——它总是优先使用最高优先级的可用凭证，只有在被限流后才 fallback 到下一个。这适合"有一个主力 key，几个备用 key"的场景。`round_robin` 适合负载均衡——让多个 key 均匀分摊请求。
+池提供四种选择策略（`credential_pool.py:59-68`），通过 `config.yaml` 的 `credential_pool_strategies` 配置：
 
-## 流式响应：token 一个一个地流出来
+- **fill_first**（默认）— 总是优先使用最高优先级的凭证，只有当它被限流才用下一个。适合"有一个主力 key，几个备用"的个人场景。
+- **round_robin** — 每次选完轮转到队尾。适合多个等价 key 做负载均衡。
+- **random** — 随机选，简单的去关联策略。
+- **least_used** — 选使用次数最少的。确保各 key 消耗均匀。
 
-### 为什么要流式
+为什么不直接用简单的列表轮换？因为凭证有**状态转换**。每个 `PooledCredential`（`credential_pool.py:91`）在三种状态间流转：
 
-如果等模型生成完整响应后再一次性返回，用户会看到一段漫长的"思考中..."等待，然后突然冒出一大段文字。流式响应让用户在模型生成的同时就看到输出，体验更像"对话"。
+- **ok** → 可用，正常选取
+- **exhausted** → 被限流（429）或余额不足（402），进入冷却期（默认 1 小时，`credential_pool.py:73`）。冷却结束后自动恢复为 ok
+- **refreshing** → OAuth token 接近过期，正在刷新中（`credential_pool.py:575-735`）
 
-### 实现细节
+如果所有凭证同时 exhausted 了怎么办？Agent 会退回到正常的重试退避逻辑——等待冷却时间过去。如果配置了 fallback_model（下一节会讲），还可以自动切换到另一个 Provider 的模型，用完全不同的凭证继续工作。
 
-流式调用在 `_interruptible_streaming_api_call()`（`run_agent.py:6154`）中实现，根据 `api_mode` 分三条路径：
+## 流式响应：让等待变得可以忍受
 
-| api_mode | 流式实现 | 特殊处理 |
-|----------|---------|---------|
-| `codex_responses` | 委托给非流式调用（Codex 内部已是流式） | 无 |
-| `bedrock_converse` | 后台线程 `converse_stream()`，主线程 0.3s poll | AWS SDK 特有的事件流格式 |
-| `chat_completions` / `anthropic` | 后台线程 SSE 流 | 90 秒 stale stream 检测 |
+等模型生成完整响应后再一次性返回，用户体验很糟——几秒钟的空白等待，然后突然冒出一大段文字。流式响应让 token 在生成的同时就送达用户，心理上把"等待"变成了"看它一点点写出来"。这不是 Hermes 特有的设计，几乎所有现代 chatbot 都这么做，但 Hermes 面临一个额外的挑战：它的 Agent 循环里，模型响应分两种——**纯文本回复**和**工具调用**。只有前者应该流式展示给用户，后者是给 Agent 自己看的内部调度指令。
 
-每个文本 token 到达时触发 `_fire_stream_delta()`（`run_agent.py:6081`），它做两件事：
-1. 经过 `StreamingContextScrubber` 过滤——清除 memory-context 标签（`<hermes-memory>...</hermes-memory>`），防止内部标记泄露到用户界面
-2. 调用 `stream_callback` 和 `stream_delta_callback`
+流式处理在架构中的位置是 Agent 核心内部、Transport 层之上。`_interruptible_streaming_api_call()`（`run_agent.py:6154`）在后台线程中接收 SSE 事件流，每个文本 token 到达时触发 `_fire_stream_delta()`（`run_agent.py:6081`）。这个方法先经过 `StreamingContextScrubber` 过滤掉内部标记（比如 `<hermes-memory>` 标签，不应泄露到用户界面），再分发给两个回调：`stream_callback`（由调用者提供，CLI 用它驱动终端输出）和 `stream_delta_callback`（TTS 语音合成管线用它在生成文本的同时开始朗读）。
 
-一个重要的设计：**工具调用 turn 静默**。如果模型响应包含工具调用，流式回调不会触发——用户只看到最终的纯文本回复被流式传输，中间的"我要搜索一下"不会逐字显示。
+不同的 Provider 有不同的流式协议——大部分走 SSE（Server-Sent Events），AWS Bedrock 有自己的事件流格式，OpenAI Codex 的 Responses API 内部已经是流式的。`_interruptible_streaming_api_call()` 按 `api_mode` 分三条路径处理这些差异，但对上层暴露统一的回调接口。
+
+一个设计选择：**工具调用 turn 完全静默**。当模型响应包含工具调用时，流式回调不触发——用户不会看到"我要搜索一下网页"这样的中间文字逐字蹦出来。只有最终的纯文本回复才会流式传输。替代方案是也流式展示工具调用意图（比如 "Searching for..."），但 Hermes 选择用工具进度回调（`tool_progress_callback`）和 spinner 动画来替代，保持输出区的干净。
+
+流式传输中如果连续 90 秒没有收到新 token，会被判定为 stale stream 并触发重试——这是为了应对 Provider 侧的 SSE 连接假死（连接未断但不再推送数据）。
 
 ## Fallback Chain：当主力模型倒下了
 
