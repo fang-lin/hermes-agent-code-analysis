@@ -237,13 +237,21 @@ exhausted credential 冷却 1 小时后自动恢复 (credential_pool.py:73)
 
 ## Credential Pool：多把钥匙的管理
 
-### 问题
+### 为什么需要凭证池？
 
-如果你有多个 API key（比如一个 OpenRouter key 和一个 Anthropic 直连 key，或者团队共享多个 key 做负载均衡），怎么管理它们？
+这不只是"多个 API key 轮流用"的问题。Hermes 面临的凭证场景比想象的复杂：
+
+- **OAuth token 有过期时间**。通过 `hermes login` 登录 Nous Portal 或 Anthropic OAuth 获取的 token 可能几小时后就失效，需要自动刷新（用 refresh_token 换新的 access_token），刷新失败时要优雅降级。
+- **同一个 Provider 可能有多个凭证**。团队共享多个 API key 分摊配额；或者用户同时有 OAuth token 和 API key，需要选择最合适的。
+- **凭证可能随时失效**。被限流（429）、余额不足（402）、key 被吊销（401）——每种失败需要不同的恢复策略。
+
+### 谁管理凭证池？
+
+重要的一点：**Credential Pool 不是 Agent 自己创建的**。凭证的发现和初始化由 CLI 层（`hermes_cli/auth.py`）或 Gateway 层在创建 Agent **之前**完成，然后通过 `credential_pool=pool` 参数注入给 Agent（`run_agent.py:898`）。Agent 只是凭证的使用者——它负责从池中选凭证、标记限流状态、触发 token 刷新，但不负责凭证从哪里来。
 
 ### 四种轮转策略
 
-`agent/credential_pool.py` 实现了一个完整的凭证池（`credential_pool.py:59-68`）：
+`agent/credential_pool.py` 实现了凭证池的核心逻辑（`credential_pool.py:59-68`）：
 
 ```
 ┌─────────────────────────────────────────┐
