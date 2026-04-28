@@ -6,9 +6,134 @@
 
 这些机制不是"高级特性"——它们是让 Hermes 能在生产环境稳定运行的基础设施。
 
-## AIAgent 的全貌
+## AIAgent 的边界与连接
 
-在深入细节前，先看 `AIAgent` 这个类到底有多大。它的 `__init__`（`run_agent.py:840-902`）接收超过 50 个参数，大致分为四类：
+在深入内部机制之前，先搞清楚一个根本问题：**AIAgent 到底是什么？它连接了谁？**
+
+### 概念模型
+
+`AIAgent` 本质上是一个**有状态的对话协调器**。它不是模型本身，也不是工具本身——它是坐在中间的调度员，负责把用户的意图翻译成"模型调用 + 工具执行"的序列，直到任务完成。
+
+用一个比喻：如果 LLM 是大脑，工具是手脚，那 AIAgent 就是神经系统——接收感觉输入（用户消息），把大脑的决策（模型响应）变成动作（工具调用），再把动作的结果反馈给大脑。
+
+### 谁创建 Agent？
+
+```
+┌─────────────┐     ┌──────────────┐     ┌───────────────┐
+│   CLI        │     │   Gateway     │     │  delegate_tool │
+│  (cli.py)    │     │ (gateway/     │     │ (子代理创建)    │
+│              │     │  run.py)      │     │               │
+└──────┬───────┘     └──────┬────────┘     └───────┬───────┘
+       │                    │                      │
+       │  创建 1 个         │  创建 ≤128 个         │  创建 N 个
+       │  AIAgent           │  AIAgent (缓存)       │  子 AIAgent
+       │                    │                      │
+       └────────────────────┼──────────────────────┘
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │   AIAgent     │
+                    └───────────────┘
+```
+
+三个创建者，三种场景：
+- **CLI** 创建 1 个 Agent，用户直接交互，生命周期 = 整个会话
+- **Gateway** 为每个聊天会话创建 1 个 Agent，最多缓存 128 个，空闲 1 小时回收
+- **delegate_tool** 创建子 Agent，生命周期 = 单个委托任务
+
+### Agent 连接了什么？
+
+```
+                    ┌──────────────────────────────────┐
+                    │           调用者                  │
+                    │  CLI / Gateway / 父 Agent         │
+                    └──────────┬───────────────────────┘
+                               │
+              run_conversation(message, history, stream_cb)
+              interrupt(message) / steer(text)
+              switch_model() / reset_session_state()
+              close()
+                               │
+                    ┌──────────▼───────────────────────┐
+                    │          AIAgent                  │
+                    │                                   │
+    ┌───────────────┤  状态:                            ├──────────────┐
+    │               │  · 会话历史 (messages list)        │              │
+    │               │  · 系统提示 (cached)               │              │
+    │               │  · 迭代预算 (共享)                  │              │
+    │               │  · 当前模型/provider                │              │
+    │               │  · rate limit 状态                 │              │
+    │               └──────────┬───────────────────────┘              │
+    │                          │                                      │
+    ▼                          ▼                                      ▼
+┌──────────┐      ┌────────────────────┐               ┌──────────────────┐
+│ LLM API  │      │    工具层           │               │  持久化            │
+│          │      │                    │               │                  │
+│ Anthropic│      │ 66 个工具          │               │ SQLite 会话存储   │
+│ OpenAI   │      │ (terminal, file,   │               │ MEMORY.md        │
+│ Bedrock  │      │  web, browser,     │               │ USER.md          │
+│ Gemini   │      │  skills, ...)      │               │ trajectory.jsonl │
+│ 本地引擎 │      │                    │               │ checkpoint 快照   │
+│ ...      │      │ 包括子代理:         │               │                  │
+│          │      │ delegate_tool      │               │                  │
+│(Transport│      │ → 创建新 AIAgent   │               │                  │
+│ 抽象层)  │      │                    │               │                  │
+└──────────┘      └────────────────────┘               └──────────────────┘
+```
+
+Agent 有四个方向的连接：
+
+1. **向上：调用者接口**。调用者（CLI、Gateway、父 Agent）通过少数几个方法和 Agent 交互：
+   - `run_conversation()` — 发一条消息，拿到完整回复（`run_agent.py:9627`）
+   - `chat()` — 简化接口，只返回文本（`run_agent.py:13063`）
+   - `interrupt()` / `steer()` — 运行时干预（`run_agent.py:4050` / `4151`）
+   - `switch_model()` — 热切换模型（`run_agent.py:2097`）
+   - `close()` — 释放所有资源（`run_agent.py:4441`）
+
+2. **向左：LLM API**。通过 Transport 抽象层调用各种模型 Provider。Agent 不直接和 API 打交道——它调用 `_build_api_kwargs()` 构建参数，Transport 负责格式转换和协议适配。
+
+3. **向下：工具层**。通过 `model_tools.handle_function_call()` 调用 66 个工具。特殊的是 `delegate_tool`——它会反过来创建新的 AIAgent，形成父子关系。
+
+4. **向右：持久化层**。SQLite 存储会话历史和搜索索引，MEMORY.md/USER.md 存储跨会话记忆，trajectory 文件存储训练数据，checkpoint 存储文件系统快照。
+
+### Agent 的生命周期
+
+```
+创建 (__init__)
+  │
+  ├─ 初始化客户端（OpenAI/Anthropic SDK）
+  ├─ 初始化工具集（discover + register）
+  ├─ 初始化记忆管理器
+  ├─ 初始化上下文压缩器
+  │
+  ▼
+活跃（可被反复调用）
+  │
+  ├─ run_conversation() ← 可调用多次
+  │    ├─ 构建/复用系统提示
+  │    ├─ 核心循环（调模型 → 执行工具 → 循环）
+  │    └─ 持久化会话
+  │
+  ├─ interrupt() ← 随时可从另一线程调用
+  ├─ steer() ← 随时可从另一线程调用
+  ├─ switch_model() ← 热切换，不中断会话
+  ├─ reset_session_state() ← 清零计数器，开始新会话
+  │
+  ▼
+关闭 (close)
+  │
+  ├─ 终止后台进程
+  ├─ 关闭沙箱环境
+  ├─ 关闭浏览器会话
+  ├─ 中断所有子代理
+  └─ 关闭 HTTP 客户端
+```
+
+关键点：**Agent 是长生命周期的**。在 Gateway 模式下，一个 Agent 实例可能服务同一个用户几小时甚至几天，中间处理几十次 `run_conversation()` 调用。这就是为什么它需要 session reset、model switch、rate limit tracking 这些"运维"能力——它不是一次性的函数调用，而是一个需要持续运行和维护的有状态服务。
+
+## AIAgent 的参数设计
+
+理解了 Agent 的边界和连接，再看它的参数就有上下文了。它的 `__init__`（`run_agent.py:840-902`）接收超过 50 个参数，大致分为四类：
 
 ```
 ┌─────────────────────────────────────────────────────────┐
