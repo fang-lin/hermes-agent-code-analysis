@@ -160,13 +160,13 @@ Agent 有四个方向的连接：
 
 ### 问题
 
-每次调用 Anthropic API，系统提示词都要随消息一起发送。一个典型的 Hermes 会话，系统提示可能有 5,000-10,000 token（包含身份、记忆、技能指南、上下文文件等）。如果一个会话有 20 轮对话，这些 token 被重复发送 20 次——但每次内容都一样。
+每次调用模型 API，系统提示词都要随消息一起发送。一个典型的 Hermes 会话，系统提示可能有 5,000-10,000 token（包含身份、记忆、技能指南、上下文文件等）。如果一个会话有 20 轮对话，这些 token 被重复发送 20 次——但每次内容都一样。
 
-Anthropic 的 Prompt Caching 功能允许标记消息的某些部分为"可缓存"。服务端会缓存这些前缀，后续请求如果前缀完全相同（byte-identical），就直接复用 KV cache，输入 token 按缓存价格计费（便宜 ~90%）。
+部分 Provider 支持 Prompt Caching 来解决这个问题。以 Anthropic 为例，它允许标记消息的某些部分为"可缓存"。服务端会缓存这些前缀，后续请求如果前缀完全相同（byte-identical），就直接复用 KV cache，输入 token 按缓存价格计费（便宜 ~90%）。Claude 经 OpenRouter 调用时也支持类似的缓存机制。
 
 ### Hermes 的 system_and_3 策略
 
-`agent/prompt_caching.py` 实现了一个叫 "system_and_3" 的策略（`prompt_caching.py:1-8`）。Anthropic 允许最多 4 个 `cache_control` breakpoint，Hermes 这样分配：
+`agent/prompt_caching.py` 实现了一个叫 "system_and_3" 的策略（`prompt_caching.py:1-8`）。以 Anthropic 的原生 API 为例，它允许最多 4 个 `cache_control` breakpoint，Hermes 这样分配：
 
 ```
 消息序列:
@@ -217,7 +217,7 @@ delay = min(base × 2^(attempt-1), max_delay) + jitter
 - 基础延迟 5 秒，每次翻倍，上限 120 秒
 - 关键是 **jitter**（随机抖动）：取 `[0, 0.5 × delay]` 范围的随机值叠加
 
-为什么要 jitter？想象一个 Gateway 同时服务 50 个 Telegram 用户，Provider 返回 429（限流）。如果所有会话都在 5 秒后重试，就会产生"雷暴群"效应——50 个请求同时砸向 API，再次触发限流。Jitter 让每个会话的重试时间错开，分散压力。
+为什么要 jitter？想象一个 Gateway 同时服务 50 个用户（比如通过 Telegram 或 Discord），Provider 返回 429（限流）。如果所有会话都在 5 秒后重试，就会产生"雷暴群"效应——50 个请求同时砸向 API，再次触发限流。Jitter 让每个会话的重试时间错开，分散压力。
 
 jitter 的 seed 用 `time_ns ^ (counter × 0x9E3779B9)`（`retry_utils.py:53`），即时间戳和单调计数器的异或——确保即使在同一毫秒内创建的多个重试也有不同的随机数。
 
@@ -297,7 +297,7 @@ exhausted credential 冷却 1 小时后自动恢复 (credential_pool.py:73)
 
 ### 问题
 
-你正在用 Claude Opus 4.6 和 Hermes 对话，突然 Anthropic API 返回 500 错误。等待恢复？还是切到备用模型？
+假设你正在用某个模型和 Hermes 对话（比如 Claude Opus 4.6 via Anthropic），突然 API 返回 500 错误。等待恢复？还是切到备用模型？
 
 ### 自动降级
 
