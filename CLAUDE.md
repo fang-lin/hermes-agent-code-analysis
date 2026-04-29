@@ -17,10 +17,11 @@
    - 信息密度 — 不过密也不空洞
    - 语言一致性 — 术语统一、文风一致
 6. **每步完成后的流程**（按顺序）：
-   1. 分析 Agent 产出草稿
-   2. 并行启动：事实审核 Agent（四维度）+ 文学性审核 Agent
-   3. 对事实审核的 ⚠️/❌ 项做二次独立验证
+   1. 分析 Agent (sonnet) 产出草稿
+   2. 并行启动：事实审核 Agent (sonnet) + 文学性审核 Agent (sonnet)
+   3. 主线 (opus) 对事实审核的 ⚠️/❌ 项做二次独立验证
    4. 写入/更新分析文档（修正事实问题 + 采纳文学性建议）
-   5. 更新 `docs/98-审核报告汇总.md`
-   6. 更新 `docs/INDEX.md` 状态
-   7. 查询 Jaeger (`scripts/jaeger-stats.sh`) 记录到 `docs/99-工作日志.md`（最后一步）
+   5. 事实审核 Agent 对文学性修改涉及的段落做增量复核
+   6. 更新 `docs/98-审核报告汇总.md`
+   7. 更新 `docs/INDEX.md` 状态
+   8. 查询 Jaeger (`scripts/jaeger-stats.sh`) 记录到 `docs/99-工作日志.md`（最后一步）
