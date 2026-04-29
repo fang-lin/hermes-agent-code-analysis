@@ -85,3 +85,9 @@ Hermes Agent 是 Nous Research 开源的自改进 AI 智能体框架。它同时
 
 - [审核报告汇总](docs/zh/98-审核报告汇总.md) — 每篇文档的审核发现和修正记录
 - [工作日志](docs/zh/99-工作日志.md) — 方法论怎么从零长出来的完整记录
+
+---
+
+**Lin Fang** 出品 — 探索如何用 AI 工具理解 AI 系统。目前正在对 OpenClaw 及更广泛的自主智能体生态进行类似分析。
+
+联系方式：[Twitter](https://twitter.com/user) | [Email](mailto:fanglin.me@gmail.com) | [GitHub](https://github.com/fang-lin)

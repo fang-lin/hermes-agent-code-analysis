@@ -85,3 +85,9 @@ Independent analysis, not official Nous Research documentation. All code referen
 
 - [Review Report](docs/en/98-review-report.md) — All review findings and corrections
 - [Work Log](docs/en/99-work-log.md) — How the methodology grew from zero
+
+---
+
+Made by **Lin Fang** — exploring how AI tools can be used to understand AI systems. Currently working on similar analyses of OpenClaw and the broader autonomous agent ecosystem.
+
+Reach out: [Twitter](https://twitter.com/user) | [Email](mailto:fanglin.me@gmail.com) | [GitHub](https://github.com/fang-lin)
