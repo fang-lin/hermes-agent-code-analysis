@@ -1,5 +1,8 @@
 # 06 - Gateway 网关：一个进程，二十个平台
 
+> **本章定位**：`gateway/` 目录（53 文件，64,729 行），是代码量最大的模块。包含核心控制器 `GatewayRunner`、28 个平台适配器、会话管理、流式投递和 Cron 调度集成。
+> **关键类**：`GatewayRunner`（`gateway/run.py:620`）、`BasePlatformAdapter`（`gateway/platforms/base.py:1121`）、`SessionStore`（`gateway/session.py`）。
+
 ## 为什么需要网关
 
 在 CLI 模式下，用户和 Agent 是一对一的——一个终端窗口、一个 Agent 实例、一个对话。但如果你想让同一个 Agent 同时服务 Telegram 群、Discord 频道、Slack workspace 和 WhatsApp 私聊呢？
