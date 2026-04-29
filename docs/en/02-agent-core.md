@@ -5,7 +5,7 @@
 
 ## Why Analyze AIAgent Separately?
 
-The previous architecture analysis traced a message's complete path from input to output. But at the Agent core stage we only scratched the surface — the main loop, tool execution, Transport adapters. In reality, the 13,293-line `run_agent.py` hides a wealth of mechanisms that directly affect performance, cost, and reliability: How does Prompt Caching cut token costs by 75%? What happens when the API rate-limits you? How do multiple API keys rotate? How are conversation trajectories persisted?
+The previous architecture analysis traced a message's complete path from input to output. But at the Agent core stage we only scratched the surface — the main loop, tool execution, Transport adapters. In reality, the 13,293-line `run_agent.py` contains a wealth of mechanisms that directly affect performance, cost, and reliability: How does Prompt Caching cut token costs by 75%? What happens when the API rate-limits you? How do multiple API keys rotate? How are conversation trajectories persisted?
 
 These mechanisms aren't "advanced features" — they're the infrastructure that lets Hermes run reliably in production.
 
