@@ -1,3 +1,5 @@
+中文 | [English](README.en.md)
+
 # Hermes Agent 源码分析
 
 > 6,384 次提交。约 587,000 行代码。9 个月。一个人带着 AI 工具写出来的 agent（智能体）框架。
