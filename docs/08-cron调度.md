@@ -127,7 +127,7 @@ acp_adapter/server.py (HermesACPAgent)
 |------|------|-----|-----------|
 | 调用者 | 定时器（自驱动） | 代码编辑器 | AI 工具链 |
 | 传输 | 无（进程内调用） | stdio JSON-RPC | stdio MCP |
-| Agent 实例 | 每个 job 独立实例 | 每个 session 独立实例 | 无 Agent（纯数据桥） |
+| Agent 实例 | 每个 job 独立实例 | 每个 session 独立实例 | 无 Agent（消息网关读写桥） |
 | 暴露的能力 | 完整 Agent（工具+技能+记忆） | 完整 Agent（含 diff 适配） | 仅消息网关读写 |
 | 状态持久化 | jobs.json + output/ | SessionDB (SQLite) | state.db (只读) |
 
