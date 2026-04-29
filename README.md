@@ -90,4 +90,4 @@ Independent analysis, not official Nous Research documentation. All code referen
 
 Made by **Lin Fang** — exploring how AI tools can be used to understand AI systems. Currently working on similar analyses of OpenClaw and the broader autonomous agent ecosystem.
 
-Reach out: [Twitter](https://twitter.com/user) | [Email](mailto:fanglin.me@gmail.com) | [GitHub](https://github.com/fang-lin)
+Reach out: [X](https://x.com/hausewoods) | [Email](mailto:fanglin.me@gmail.com) | [GitHub](https://github.com/fang-lin)
