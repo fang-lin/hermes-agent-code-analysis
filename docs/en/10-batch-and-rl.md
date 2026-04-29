@@ -106,7 +106,7 @@ These configurations illustrate how Hermes operates as a training-data factory �
 
 ## What's Next
 
-The final chapter, **12 - Engineering Practices**, examines Hermes's engineering quality at the code level — testing strategy, the logging system, data persistence, and coding conventions.
+The final chapter, **11 - Engineering Practices**, examines Hermes's engineering quality at the code level — testing strategy, the logging system, data persistence, and coding conventions.
 
 ---
 

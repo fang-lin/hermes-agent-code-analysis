@@ -77,7 +77,7 @@ The Nix flake uses `uv2nix` to convert Python dependencies into Nix derivations,
 
 ## What's Next
 
-Deployment answers the question of "where the Agent runs." The next chapter, **11 - Batch Runs & RL**, focuses on Hermes's research side — how to generate training data in bulk and how to do reinforcement learning.
+Deployment answers the question of "where the Agent runs." The next chapter, **10 - Batch Runs & RL**, focuses on Hermes's research side — how to generate training data in bulk and how to do reinforcement learning.
 
 ---
 

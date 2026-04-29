@@ -332,19 +332,19 @@ Factual: overall ✅; comparison table "pure data bridge" → "message gateway r
 
 ---
 
-## Step 10.0: Environment & Deployment (10-deployment.md)
+## Step 10.0: Environment & Deployment (09-deployment.md)
 
 Factual: ❌ profiles → profile command name corrected. Literary: 3🟢 2🟡 (Nix/Homebrew section too dense; closing section doesn't echo the opening). **Passed after corrections.**
 
 ---
 
-## Step 11.0: Batch Runs & RL (11-batch-and-rl.md)
+## Step 11.0: Batch Runs & RL (10-batch-and-rl.md)
 
 Factual: tool parsers 10 → 11; CompressionConfig line number 82 → 83; flowchart encoding fixed. Literary: 2🟢 3🟡 (colloquialisms; mixed language in diagrams); no 🔴. **Passed after corrections.**
 
 ---
 
-## Step 12.0: Engineering Practices (12-engineering-practices.md)
+## Step 12.0: Engineering Practices (11-engineering-practices.md)
 
 Factual: FTS line range 103-125 → 103-156; _reconcile_columns line number corrected; WAL checkpoint description corrected. Literary: 2🟢 3🟡 (heading strengthening); no 🔴. **Passed after corrections.**
 

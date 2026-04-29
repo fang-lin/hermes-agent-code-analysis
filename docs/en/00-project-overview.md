@@ -228,10 +228,10 @@ Every file and directory at the top level of `hermes-agent/`:
 | `toolset_distributions.py` | file | 364 | Toolset probability distributions for data generation (→ [11](11-batch-runner-and-rl.md)) |
 | `mcp_serve.py` | file | 867 | MCP server exposing messaging gateway capabilities (→ [08](08-cron-scheduler.md)) |
 | `hermes_constants.py` | file | 295 | Shared constants (HERMES_HOME, etc.) |
-| `hermes_state.py` | file | 2,094 | SQLite session storage (→ [12](12-engineering-practices.md)) |
-| `hermes_logging.py` | file | 389 | Three-way log dispatch (→ [12](12-engineering-practices.md)) |
+| `hermes_state.py` | file | 2,094 | SQLite session storage (→ [12](11-engineering-practices.md)) |
+| `hermes_logging.py` | file | 389 | Three-way log dispatch (→ [12](11-engineering-practices.md)) |
 | `hermes_time.py` | file | 104 | Time utility functions |
-| `utils.py` | file | 271 | General utilities including atomic writes (→ [12](12-engineering-practices.md)) |
+| `utils.py` | file | 271 | General utilities including atomic writes (→ [12](11-engineering-practices.md)) |
 
 ### Core Directories
 
@@ -248,7 +248,7 @@ Every file and directory at the top level of `hermes-agent/`:
 | `acp_adapter/` | 9 | 2,354 | ACP editor protocol adapter (→ [08](08-cron-scheduler.md)) |
 | `tui_gateway/` | 8 | 5,750 | JSON-RPC bridge between Ink TUI and Python Agent (→ [07](07-tui-and-web.md)) |
 | `environments/` | 30 | 7,306 | RL training environments (→ [11](11-batch-runner-and-rl.md)) |
-| `tests/` | 826 | 285,239 | Test suite (→ [12](12-engineering-practices.md)) |
+| `tests/` | 826 | 285,239 | Test suite (→ [12](11-engineering-practices.md)) |
 
 ### Frontend and UI
 
@@ -285,8 +285,8 @@ Every file and directory at the top level of `hermes-agent/`:
 |------|-------------|
 | `README.md` | Project README |
 | `AGENTS.md` | Development guide for AI coding assistants |
-| `CONTRIBUTING.md` | Contribution guide (→ [12](12-engineering-practices.md)) |
-| `SECURITY.md` | Security policy (→ [12](12-engineering-practices.md)) |
+| `CONTRIBUTING.md` | Contribution guide (→ [12](11-engineering-practices.md)) |
+| `SECURITY.md` | Security policy (→ [12](11-engineering-practices.md)) |
 | `RELEASE_v*.md` | Per-version release notes |
 | `acp_registry/` | ACP agent registration metadata |
 | `docker/` | Docker entrypoint scripts |

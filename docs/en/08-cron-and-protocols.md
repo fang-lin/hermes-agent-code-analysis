@@ -140,7 +140,7 @@ What they have in common: none of them modify the Agent core — they are adapta
 
 ## What's Next
 
-At this point we have covered all of Hermes's major subsystems. The originally planned **09 - ACP Adapter** chapter has been merged into this one (covered above). **10 - Environment and Deployment** will focus on operations — Docker builds, terminal backend configuration, and multi-profile management.
+At this point we have covered all of Hermes's major subsystems. The originally planned **09 - ACP Adapter** chapter has been merged into this one (covered above). **09 - Environment and Deployment** will focus on operations — Docker builds, terminal backend configuration, and multi-profile management.
 
 ---
 

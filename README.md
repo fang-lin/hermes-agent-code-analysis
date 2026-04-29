@@ -1,87 +1,87 @@
-中文 | [English](README.en.md)
+[中文](README.zh.md) | English
 
-# Hermes Agent 源码分析
+# Hermes Agent Source Code Analysis
 
-> 6,384 次提交。约 587,000 行代码。9 个月。一个人带着 AI 工具写出来的 agent（智能体）框架。
+> 6,384 commits. ~587,000 lines of code. 9 months. An agent framework built by one person with AI tools.
 >
-> 我们用另一个 AI，花了两天、烧掉约 1.7 亿 token，把它从头到尾拆开看了一遍。
+> We used another AI, spent two days and ~200 million tokens, and tore the whole thing apart.
 
-这是对 [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) v0.11.0 的完整源码分析。不是 API 手册，不是使用教程，而是**架构拆解**——像拆开一台精密机器，看每个齿轮为什么在那里、和谁咬合、缺了会怎样。
+This is a complete source code analysis of [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) v0.11.0. Not an API reference, not a usage tutorial, but an **architecture teardown** — like disassembling a precision machine to see why each gear is where it is, what it meshes with, and what breaks if you remove it.
 
-12 篇叙事风格的技术文档。每篇都回答一个问题：**这个子系统面临什么问题，做了什么选择，为什么不选别的方案，出问题了会怎样。**
+12 narrative-style technical documents. Each one answers a question: **what problem does this subsystem face, what choices were made, why not the alternatives, and what happens when things go wrong.**
 
-## 分析对象
+## Subject of Analysis
 
-Hermes Agent 是 Nous Research 开源的自改进 AI 智能体框架。它同时是四个东西：一个可用的 AI 助手、一个支持 19 个消息平台的 Gateway（统一消息网关）、一个 66 个工具的执行引擎、以及一个 RL（强化学习，Reinforcement Learning）训练数据工厂。
+Hermes Agent is an open-source self-improving AI agent framework by Nous Research. It's four things at once: a usable AI assistant, a unified gateway serving 19 messaging platforms, an execution engine with 66 tools, and an RL training data factory.
 
-有意思的是——它自己大概率也是用 AI 写出来的（[证据在第 00 篇](docs/00-项目概述.md#这些代码是人写的吗)）。
+The interesting part — it was most likely built by AI itself ([evidence in doc 00](docs/en/00-project-overview.md)).
 
-## 文档索引
+## Document Index
 
-| 编号 | 文档 | 一句话 |
-|------|------|--------|
-| 00 | [项目概述](docs/00-项目概述.md) | Hermes 是什么、为什么这样设计、完整文件索引 |
-| 01 | [架构分析](docs/01-架构分析.md) | 跟着一条消息走完从输入到输出的全程 |
-| 02 | [Agent 核心](docs/02-agent核心.md) | 13,000 行的"上帝文件"（God Object）里藏了什么 |
-| 03 | [工具系统](docs/03-工具系统.md) | 66 个工具怎么注册、调度、审批和限流 |
-| 04 | [技能系统](docs/04-技能系统.md) | Agent 怎么从经验中学会做事 |
-| 05 | [插件系统](docs/05-插件系统.md) | 16 种 Hook（生命周期钩子）让 Python 代码接入 Agent 的任何阶段 |
-| 06 | [Gateway 网关](docs/06-gateway网关.md) | 一个进程同时服务 Telegram、Discord、Slack…… |
-| 07 | [TUI 与 Web](docs/07-tui与web.md) | 同一个 Agent 的三张脸（TUI 即终端用户界面） |
-| 08 | [Cron 与外部协议](docs/08-cron调度.md) | 让 Agent 自己醒来干活（Cron 定时调度），让编辑器调用 Agent（ACP 协议） |
-| 10 | [环境与部署](docs/10-环境与部署.md) | 从笔记本到 GPU 云的六种运行方式 |
-| 11 | [批量运行与 RL](docs/11-批量运行与rl.md) | Agent 不只是产品，也是训练数据工厂 |
-| 12 | [工程实践](docs/12-工程实践.md) | 587,000 行代码怎么测试、记日志、保安全 |
+| # | Document | One-liner |
+|---|----------|-----------|
+| 00 | [Project Overview](docs/en/00-project-overview.md) | What Hermes is, why it's designed this way, full file index |
+| 01 | [Architecture](docs/en/01-architecture.md) | Follow a message from input to output, end to end |
+| 02 | [Agent Core](docs/en/02-agent-core.md) | What's inside the 13,000-line God Object |
+| 03 | [Tool System](docs/en/03-tool-system.md) | How 66 tools get registered, dispatched, approved, and throttled |
+| 04 | [Skills System](docs/en/04-skills-system.md) | How the Agent learns to do things from experience |
+| 05 | [Plugin System](docs/en/05-plugin-system.md) | 16 lifecycle hooks that let Python code tap into any stage |
+| 06 | [Gateway](docs/en/06-gateway.md) | One process serving Telegram, Discord, Slack, and more |
+| 07 | [TUI & Web](docs/en/07-tui-and-web.md) | Three faces of the same Agent |
+| 08 | [Cron & Protocols](docs/en/08-cron-and-protocols.md) | Letting the Agent wake up on its own; letting editors call it |
+| 09 | [Deployment](docs/en/09-deployment.md) | Six ways to run, from laptop to GPU cloud |
+| 10 | [Batch & RL](docs/en/10-batch-and-rl.md) | The Agent as a training data factory |
+| 11 | [Engineering](docs/en/11-engineering-practices.md) | How 587,000 lines get tested, logged, and secured |
 
-## 这份分析是怎么做出来的
+## How This Analysis Was Made
 
-587,000 行代码不可能靠一个人（或一个 AI）一次性看完不出错。我们用三个 AI Agent 分工协作——一个负责读代码写草稿，两个负责挑毛病：
+587,000 lines of code can't be read accurately by one person — or one AI — in a single pass. We used three AI Agents working in parallel: one reads code and drafts, two find mistakes:
 
 ```
-分析 Agent (Sonnet 模型)  → 读源码，产出草稿
+Analysis Agent (Sonnet)     → Read source code, produce draft
   ↓
-[事实审核 Agent ‖ 文学性审核 Agent]  → 并行审核，互不干扰
+[Factual Review Agent ‖ Literary Review Agent]  → Parallel review, independent
   ↓
-主线 (Opus 模型)          → 二次验证 → 修正 → 增量复核 → 定稿
+Main thread (Opus)          → Second verification → Fix → Incremental recheck → Finalize
 ```
 
-整个过程消耗约 **约 1.7 亿 token**，历时 **两天**。每个概念用 9 问模板分析（是什么 / 从哪来 / 在哪里 / 依赖谁 / 怎么工作 / 解决什么 / 为什么不用别的 / 出错了会怎样 / 哪里可以调），织入 Martin Fowler（软件工程领域知名技术作家）风格的叙事中。
+The entire process consumed approximately **200 million tokens** over **two days**. Each concept was analyzed through a 9-question template (what is it / where did it come from / where does it sit / who depends on it / how does it work / what does it solve / why not alternatives / what happens on failure / what's configurable), woven into a Martin Fowler–style narrative.
 
-方法论不是一开始就有的——它在工作过程中从用户的反馈里逐步长出来。完整的演进记录在[工作日志](docs/99-工作日志.md)里。
+The methodology wasn't there from day one — it grew organically from user feedback during the work. The full evolution is recorded in the [work log](docs/en/99-work-log.md).
 
-## 五个最有意思的发现
+## Five Most Interesting Findings
 
-1. **这个项目大概率是 AI 写的**。主要贡献者日均 53 次提交，凌晨比白天活跃，131 次 Claude Co-Author（AI 共同作者）标记。我们推测 60-80% 的代码行数由 AI 生成——而这个项目本身就是一个 AI agent。用 AI 开发 AI，dogfooding（用自己的产品开发自己）到了极致。
+1. **This project was most likely written by AI.** The primary contributor averaged 53 commits per day, was more active at 3 AM than at noon, and left 131 Claude Co-Author tags in git history. We estimate 60–80% of the code lines were AI-generated — and the project itself is an AI agent. Dogfooding taken to the extreme.
 
-2. **两个"上帝文件"扛起了整个系统**。`run_agent.py`（13,293 行）和 `cli.py`（11,395 行）——加起来快 25,000 行。`agent/` 子目录是逐步从 `run_agent.py` 抽离出去的，但"胶水代码"（Glue Code，串联各子系统的编排逻辑）本身也有 13,000 行。
+2. **Two God Objects carry the entire system.** `run_agent.py` (13,293 lines) and `cli.py` (11,395 lines) — nearly 25,000 lines combined. The `agent/` subdirectory was gradually extracted from `run_agent.py`, but the glue code itself is still 13,000 lines.
 
-3. **安全不是事后补丁，是 8 层纵深防御**。从硬核封锁（`rm -rf /` 无条件拒绝）到 LLM 自动判断的 Smart 审批模式，从 SSRF（服务端请求伪造）防护到 Tirith 内容扫描——即使开了 `--yolo`（跳过审批的快捷模式），最危险的命令仍然被拦截。
+3. **Security isn't an afterthought — it's 8 layers of defense in depth.** From hardcoded kill patterns (`rm -rf /` unconditionally rejected) to LLM-powered Smart approval mode, from SSRF protection to Tirith content scanning — even with `--yolo` enabled, the most dangerous commands are still blocked.
 
-4. **Prompt Caching（提示词缓存）的守护比缓存本身更精巧**。标记 4 个 Breakpoint（缓存断点）只需要 30 行代码，但为了让缓存真正命中——系统提示只构建一次、JSON 序列化做 sort_keys 标准化、动态信息走用户消息而非系统提示——这些"守护策略"分散在几千行代码里。
+4. **The guards around Prompt Caching are more clever than the caching itself.** Marking 4 breakpoints takes 30 lines of code, but ensuring cache actually hits — building the system prompt only once per session, normalizing JSON with `sort_keys`, routing dynamic info through user messages instead of the system prompt — these "guard strategies" are scattered across thousands of lines.
 
-5. **它真的能自己训练下一代自己**。`batch_runner.py` 批量生成轨迹 → `trajectory_compressor.py` 压缩到训练窗口 → `environments/` 提供 Atropos RL（强化学习）环境 → 11 种 Tool Call（工具调用）格式解析器确保跨模型兼容。这不是概念验证，是可以跑的训练管线。
+5. **It can genuinely train the next generation of itself.** `batch_runner.py` generates trajectories in bulk → `trajectory_compressor.py` compresses them to training window size → `environments/` provides Atropos RL environments → 11 tool call format parsers ensure cross-model compatibility. This isn't a proof of concept — it's a working training pipeline.
 
-## 这个项目会走向哪里
+## Where This Project Is Heading
 
-> 以下预测来自三个不同视角的 AI Agent "会诊"——一位架构师、一位产品分析师、一位 AI 研究者——各自独立阅读全部 12 篇分析后给出的判断。我们综合了它们的共识和分歧。
+> The following predictions come from a "consultation" among three AI Agents with different perspectives — an architect, a product strategist, and an AI researcher — each independently reading all 12 analysis documents. We synthesized their consensus and disagreements.
 
-**飞轮是真的，但转得比想象中慢。** 三个视角的最大共识：`batch_runner` → `trajectory_compressor` → `environments/` 这条管线不是玩具，是生产级的训练数据工厂。但飞轮有三个卡点——奖励信号稀疏（大多数真实任务没有自动打分器）、轨迹压缩引入信息损失（GRPO 即 Group Relative Policy Optimization 需要原始 logprobs 即对数概率，压缩后的摘要提供不了）、长尾任务覆盖不足（基准测试主要是终端和软件工程任务）。飞轮最先能转动的部分是**工具调用格式对齐**——`tool_call_parsers/` 重新实现 11 种格式，恰好说明这仍是当前的实际瓶颈。
+**The flywheel is real, but it spins slower than you'd think.** The strongest consensus across all three perspectives: the `batch_runner` → `trajectory_compressor` → `environments/` pipeline isn't a toy — it's a production-grade training data factory. But the flywheel has three sticking points: sparse reward signals (most real tasks lack automatic scorers), information loss from trajectory compression (GRPO needs raw logprobs that compressed summaries can't provide), and insufficient long-tail coverage (benchmarks focus on terminal and SWE tasks). The part that will spin first is **tool call format alignment** — `tool_call_parsers/` reimplements 11 formats, which tells you this is still the practical bottleneck.
 
-**Hermes 不会正面对抗 Claude Code——它会成为 Claude Code 的后端。** `mcp_serve.py` 把消息网关暴露为 MCP（Model Context Protocol，模型上下文协议）工具，`acp_adapter/` 对接 ACP（Agent Client Protocol，智能体客户端协议）编辑器协议。Hermes 同时是独立工具和被其他 AI 工具消费的基础设施。产品分析师的判断：这两者更像 AWS 和 GitHub Actions 的关系，而非 Vim 和 Emacs 的关系。Hermes 的差异化在于"Claude Code 做不到的事"——19 个消息平台、7×24 Cron（定时任务）调度、RL 数据生成。
+**Hermes won't compete head-on with Claude Code — it'll become Claude Code's backend.** `mcp_serve.py` exposes the messaging gateway as MCP tools; `acp_adapter/` implements editor protocol integration. Hermes is simultaneously a standalone tool and infrastructure consumed by other AI tools. The product strategist's take: these two are more like AWS and GitHub Actions than Vim and Emacs. Hermes differentiates on "things Claude Code can't do" — 19 messaging platforms, 24/7 cron scheduling, RL data generation.
 
-**13,000 行的"上帝文件"是定时炸弹。** 架构师最确定的判断。`run_agent.py` 的 50+ 参数 `__init__` 是"配置爆炸"的典型症状，`delegate_tool`（子 Agent 委托工具）的 lazy import（延迟导入）是循环依赖的创可贴。Transport（传输适配）层已经成功提取，下一步很可能是引入 AgentFactory（Agent 工厂模式）+ 核心循环独立文件。`cli.py` 面临同样的压力——Ink TUI（基于 React 的终端界面框架）的出现已经暗示了方向：把交互逻辑从 Python 移到 Node.js。
+**The 13,000-line God Object is a ticking time bomb.** The architect's most confident prediction. `run_agent.py`'s 50+ parameter `__init__` is a textbook case of configuration explosion; `delegate_tool`'s lazy import is a band-aid over circular dependencies. The Transport layer has already been successfully extracted; next up is likely an AgentFactory plus a standalone core loop file. `cli.py` faces the same pressure — the appearance of Ink TUI already signals the direction: moving interaction logic from Python to Node.js.
 
-**Prompt Caching 从成本技巧升级为架构约束。** 研究者视角的独到洞察："哪些信息放系统提示、哪些放用户消息"不再是风格问题，而是经济决策。不做缓存优化的 Agent 在经济上无法竞争。Hermes 的"双注入"策略（静态记忆走系统提示保缓存、动态检索走用户消息保新鲜）和技能的三层 Progressive Disclosure（渐进式披露），都是缓存友好架构的典范——这些设计将被其他框架借鉴。
+**Prompt Caching is graduating from cost trick to architectural constraint.** The researcher's unique insight: "what goes in the system prompt vs. user message" is no longer a style question — it's an economic decision. Agents that don't optimize caching can't compete economically. Hermes's "dual injection" strategy (static memory in system prompt for cache hits, dynamic retrieval in user messages for freshness) and the three-tier Progressive Disclosure for skills are exemplary cache-friendly architectures — other frameworks will borrow these designs.
 
-**技能自改进面临"遗忘-泛化"困境。** "自改进"是真实机制（`skill_manage(action='patch')` + 系统提示强制指令），但范围有限——改的是本地 SKILL.md 文件，不是模型权重。更深层的问题：如果一次错误任务写入了错误步骤，这个错误会污染所有后续使用该技能的任务。研究者预测技能系统会演进为**版本化知识库**——有版本历史、质量评分和自动回滚，而非当前的单文件覆写。
+**Skill self-improvement faces a "forgetting vs. generalization" dilemma.** Self-improvement is a real mechanism (`skill_manage(action='patch')` + mandatory system prompt directives), but limited in scope — it modifies local SKILL.md files, not model weights. The deeper problem: if one bad task writes incorrect steps, that error propagates to all subsequent uses of that skill. The researcher predicts the skills system will evolve into a **versioned knowledge base** — with version history, quality scores, and automatic rollback — rather than the current single-file overwrite.
 
-**开源策略短期坚持，中期面临分化。** MIT 开源是为了获取用户规模（用户越多 → 训练数据越多 → 模型越好）。但 Gateway 模块 64,729 行代码的维护成本在增长，587,000 行代码以日均 53 次提交的速度膨胀。产品分析师的判断：最可能的走向是核心引擎继续 MIT 开源，Gateway 平台适配器和 Skills Hub（技能市场）官方索引逐步走商业授权——类似 HashiCorp 对 Terraform 的路径。
+**Open source strategy holds short-term, but faces bifurcation mid-term.** MIT licensing is there to acquire user scale (more users → more training data → better models). But the Gateway module's 64,729 lines of maintenance burden is growing, and 587,000 lines of code expand at 53 commits per day. The product strategist's prediction: the most likely path is keeping the core engine MIT while gradually moving Gateway platform adapters and Skills Hub's official index toward commercial licensing — similar to HashiCorp's path with Terraform.
 
-## 声明
+## Disclaimer
 
-独立分析，非 Nous Research 官方文档。所有代码引用均经独立验证。基于 v0.11.0 源码，后续版本可能有变化。
+Independent analysis, not official Nous Research documentation. All code references independently verified. Based on v0.11.0 source; later versions may differ.
 
-## 过程文档
+## Process Documentation
 
-- [审核报告汇总](docs/98-审核报告汇总.md) — 每篇文档的审核发现和修正记录
-- [工作日志](docs/99-工作日志.md) — 方法论怎么从零长出来的完整记录
+- [Review Report](docs/en/98-review-report.md) — All review findings and corrections
+- [Work Log](docs/en/99-work-log.md) — How the methodology grew from zero
