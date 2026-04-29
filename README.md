@@ -77,6 +77,8 @@ The methodology wasn't there from day one — it grew organically from user feed
 
 **Open source strategy holds short-term, but faces bifurcation mid-term.** MIT licensing is there to acquire user scale (more users → more training data → better models). But the Gateway module's 64,729 lines of maintenance burden is growing, and 587,000 lines of code expand at 53 commits per day. The product strategist's prediction: the most likely path is keeping the core engine MIT while gradually moving Gateway platform adapters and Skills Hub's official index toward commercial licensing — similar to HashiCorp's path with Terraform.
 
+If this analysis is useful to you, a ⭐ helps others find it.
+
 ## Disclaimer
 
 Independent analysis, not official Nous Research documentation. All code references independently verified. Based on v0.11.0 source; later versions may differ.
