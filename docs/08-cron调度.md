@@ -39,13 +39,13 @@ Hermes 的 cron 是**纯应用层实现**（`cron/` 目录），不依赖系统 
 
 ### 执行引擎
 
-Gateway 后台每 60 秒调用 `scheduler.tick()`（`scheduler.py:1197-1354`）。tick 的设计有几个值得注意的点：
+Gateway 后台每 60 秒调用 `scheduler.tick()`（`scheduler.py:1197-1354`）。tick 的设计有四个值得注意的机制，它们从不同角度保障任务执行的正确性和效率：
 
-**At-most-once 语义**。先把 `next_run_at` 推进到下一个周期，再执行任务。如果任务执行中途 Gateway 崩溃重启，`next_run_at` 已经是下一个周期了，不会重复执行。这比"先执行再推进"安全——后者在崩溃时可能导致同一任务被执行两次。
+**At-most-once（至多执行一次）语义**。先把 `next_run_at` 推进到下一个周期，再执行任务。如果任务执行中途 Gateway 崩溃重启，`next_run_at` 已经是下一个周期了，不会重复执行。这比"先执行再推进"安全——后者在崩溃时可能导致同一任务被执行两次。
 
-**Grace window**。如果 Gateway 宕机了 6 小时再重启，不会把这 6 小时内错过的所有任务一次性批量执行。grace window 的计算是 `min(max(period/2, 120s), 7200s)`——超出这个窗口的错过任务被静默跳过。
+**Grace window（宽限窗口）**。如果 Gateway 宕机了 6 小时再重启，不会把这 6 小时内错过的所有任务一次性批量执行。grace window 的计算是 `min(max(period/2, 120s), 7200s)`——超出这个窗口的错过任务被静默跳过。
 
-**Wake gate**。任务可以配一个 pre-check 脚本（`scheduler.py:797-818`），脚本输出 `{"wakeAgent": false}` 时跳过整个 Agent 运行。这适合"只在有新数据时才执行"的场景——脚本先检查是否有新 PR，没有就不唤醒 Agent，省下一次 API 调用。
+**Wake gate（唤醒门控）**。任务可以配一个 pre-check 脚本（`scheduler.py:797-818`），脚本输出 `{"wakeAgent": false}` 时跳过整个 Agent 运行。这适合"只在有新数据时才执行"的场景——脚本先检查是否有新 PR，没有就不唤醒 Agent，省下一次 API 调用。
 
 **`[SILENT]` 抑制**。Agent 回复以 `[SILENT]` 开头时（`scheduler.py:115`），输出保存本地但不投递到聊天。系统提示明确告诉模型可以用这个标记："如果没有值得报告的内容，回复 [SILENT]"（`scheduler.py:720-731`）。
 
@@ -104,9 +104,9 @@ acp_adapter/server.py (HermesACPAgent)
 
 在 [05-插件系统](05-插件系统.md) 中我们看到 Hermes 作为 MCP **客户端**连接外部工具。`mcp_serve.py` 是反过来的——Hermes 作为 MCP **服务端**，把自己管理的聊天平台会话暴露给其他 AI 工具（如 Claude Code、Cursor）。
 
-启动方式：`hermes mcp serve`（stdio 传输）。
+一个典型场景：你在 Claude Code 里工作，想查看 Telegram 群里同事刚才说了什么——Claude Code 通过 MCP 调用 Hermes 的 `messages_read`，读取 Telegram 会话的最新消息，不需要切换到 Telegram 客户端。
 
-它暴露 10 个工具（`mcp_serve.py:452-809`），本质上是一套消息网关的读写 API：
+启动方式：`hermes mcp serve`（stdio 传输）。它暴露 10 个工具（`mcp_serve.py:452-809`），本质上是一套消息网关的读写 API：
 
 | 工具 | 功能 |
 |------|------|
@@ -120,8 +120,6 @@ acp_adapter/server.py (HermesACPAgent)
 | `permissions_list_open` / `permissions_respond` | 审批管理 |
 
 `EventBridge`（`mcp_serve.py:185-425`）是事件推送的核心：后台线程每 200ms 轮询 `state.db`，用文件 mtime 比较跳过无变化的轮询（性能开销极低），发现新消息后放入内存队列（上限 1000 条），`events_wait` 通过 `threading.Event` 实现长轮询。
-
-一个典型使用场景：你在 Claude Code 里工作，想查看 Telegram 群里同事刚才说了什么——Claude Code 通过 MCP 调用 Hermes 的 `messages_read`，读取 Telegram 会话的最新消息，不需要切换到 Telegram 客户端。
 
 ## 三个协议的对比
 
