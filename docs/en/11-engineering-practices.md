@@ -1,5 +1,8 @@
 # 12 - Engineering Practices: Maintaining 578,000 Lines of Code
 
+[中文](../zh/11-工程实践.md) | English
+
+
 > **Scope**: Cross-module engineering infrastructure — `hermes_state.py` (2,094-line SQLite session store), `hermes_logging.py` (389-line logging system), `utils.py` (271-line atomic write utilities), `tests/` (826 files, 285,239 lines of tests), `CONTRIBUTING.md`, `SECURITY.md`.
 
 ## Infrastructure for a Large Project

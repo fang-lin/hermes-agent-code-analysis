@@ -1,5 +1,8 @@
 # 00 - Hermes Agent: An AI Agent That Tries to Evolve Itself
 
+[中文](../zh/00-项目概述.md) | English
+
+
 ## What Problem Is It Solving?
 
 If you want an AI agent that's more than a one-shot tool — one that learns from experience, remembers who you are across sessions, and can work autonomously while you're away — how would you design it?

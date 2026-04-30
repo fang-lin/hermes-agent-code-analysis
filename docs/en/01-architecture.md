@@ -1,5 +1,8 @@
 # 01 - A Message's Journey: Deep Dive into Hermes Architecture
 
+[中文](../zh/01-架构分析.md) | English
+
+
 > **Chapter scope**: Cross-module architectural analysis, tracing a message's complete path from input to output.
 > **Code covered**: `cli.py` (11,395 lines), `run_agent.py` (13,293 lines), `agent/` (52 files, 29,201 lines), `tools/` (82 files, 54,531 lines), `gateway/` (53 files, 64,729 lines).
 

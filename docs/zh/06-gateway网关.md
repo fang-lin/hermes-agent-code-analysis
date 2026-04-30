@@ -1,5 +1,8 @@
 # 06 - Gateway 网关：一个进程，二十个平台
 
+中文 | [English](../en/06-gateway.md)
+
+
 > **本章定位**：`gateway/` 目录（53 文件，64,729 行），是代码量最大的模块。包含核心控制器 `GatewayRunner`、28 个平台适配器、会话管理、流式投递和 Cron 调度集成。
 > **关键类**：`GatewayRunner`（`gateway/run.py:620`）、`BasePlatformAdapter`（`gateway/platforms/base.py:1121`）、`SessionStore`（`gateway/session.py`）。
 

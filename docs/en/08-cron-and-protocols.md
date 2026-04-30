@@ -1,5 +1,8 @@
 # 08 - Cron Scheduling and External Protocol Adapters
 
+[中文](../zh/08-cron调度.md) | English
+
+
 > **Chapter scope**: Three independent subsystems — `cron/` (3 files, 2,275 lines of scheduled dispatching), `acp_adapter/` (9 files, 2,354 lines of editor protocol adaptation), and `mcp_serve.py` (867 lines, MCP server). They share a common design principle: exposing AIAgent capabilities to different external callers.
 
 ## The Agent Shouldn't Only Work When You Talk to It

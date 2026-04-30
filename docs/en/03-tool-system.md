@@ -1,5 +1,8 @@
 # 03 - The Tool System: The Agent's 66 Pairs of Hands
 
+[中文](../zh/03-工具系统.md) | English
+
+
 > **Chapter scope**: `tools/` directory (82 files, 54,531 lines) + `model_tools.py` (676 lines) + `toolsets.py` (784 lines). This is the tool layer — the Agent's execution capability stack.
 > **Key classes**: `ToolRegistry` (`tools/registry.py:100`), `handle_function_call()` (`model_tools.py:500`).
 

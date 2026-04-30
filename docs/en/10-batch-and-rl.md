@@ -1,5 +1,8 @@
 # 11 - Batch Runs & RL: From Agent to Training Data
 
+[中文](../zh/10-批量运行与rl.md) | English
+
+
 > **Scope**: Research infrastructure — `batch_runner.py` (1,287-line bulk trajectory generator), `trajectory_compressor.py` (1,508-line trajectory compressor), `rl_cli.py` (446-line RL entry point), `environments/` (30 files, 7,306 lines of Atropos RL environments), `tinker-atropos/` (submodule).
 
 ## The Agent as a Data Factory

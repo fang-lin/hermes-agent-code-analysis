@@ -1,5 +1,8 @@
 # 07 - TUI 与 Web：Agent 的三张面孔
 
+中文 | [English](../en/07-tui-and-web.md)
+
+
 > **本章定位**：三个界面层——`cli.py`（11,395 行，prompt_toolkit TUI）、`ui-tui/`（Node.js/Ink TUI）+ `tui_gateway/`（8 文件，5,750 行桥接层）、`web/`（React SPA）+ `hermes_cli/web_server.py`（FastAPI 后端）。CLI 子命令系统在 `hermes_cli/`（58 文件，61,896 行）。
 
 ## 同一个 Agent，三种界面

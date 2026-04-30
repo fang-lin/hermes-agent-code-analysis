@@ -1,5 +1,8 @@
 # 07 - TUI and Web: Three Faces of the Agent
 
+[中文](../zh/07-tui与web.md) | English
+
+
 > **Chapter scope**: Three interface layers — `cli.py` (11,395 lines, prompt_toolkit TUI), `ui-tui/` (Node.js/Ink TUI) + `tui_gateway/` (8 files, 5,750 lines of bridging code), `web/` (React SPA) + `hermes_cli/web_server.py` (FastAPI backend). The CLI subcommand system lives in `hermes_cli/` (58 files, 61,896 lines).
 
 ## One Agent, Three Interfaces

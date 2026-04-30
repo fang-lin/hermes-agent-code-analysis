@@ -1,5 +1,8 @@
 # 04 - Skills System: The Agent's Procedural Memory
 
+[中文](../zh/04-技能系统.md) | English
+
+
 > **Chapter scope**: Skills are a functional mechanism, not a standalone module. The code is spread across `tools/skills_tool.py`, `tools/skill_manager_tool.py`, `tools/skills_hub.py` (3,225 lines), `agent/skill_commands.py`, `agent/skill_preprocessing.py`, `agent/skill_utils.py`, and `agent/prompt_builder.py`. Data lives in `~/.hermes/skills/` (83 built-in skills + 58 optional skills).
 
 ## Two Kinds of Memory

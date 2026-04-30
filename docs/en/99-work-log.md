@@ -1,5 +1,8 @@
 # Work Log
 
+[中文](../zh/99-工作日志.md) | English
+
+
 This document records the complete working process of the hermes-agent source code analysis project, including methodology, execution details for each step, agent assignments, and resource consumption.
 
 ---

@@ -1,5 +1,8 @@
 # 10 - Environment & Deployment: From Laptop to Cloud Cluster
 
+[中文](../zh/09-环境与部署.md) | English
+
+
 > **Scope**: Deployment and operations configuration — `Dockerfile` (67 lines), `docker-compose.yml`, `setup-hermes.sh` (399-line install script), `cli-config.yaml.example` (1,002-line config template), `hermes_cli/profiles.py` (multi-profile mechanism), `flake.nix` (Nix packaging), `packaging/` (Homebrew).
 
 ## Where an Agent Lives

@@ -1,5 +1,8 @@
 # 02 - Agent Core: The Inner Workings of a 13,000-Line God Object
 
+[中文](../zh/02-agent核心.md) | English
+
+
 > **Chapter scope**: `run_agent.py` single file (13,293 lines) + `agent/` subdirectory (52 files, 29,201 lines). This is the Agent core module — the heart of the system.
 > **Key class**: `AIAgent` (`run_agent.py:840`) — a stateful conversation coordinator with 50+ parameters.
 

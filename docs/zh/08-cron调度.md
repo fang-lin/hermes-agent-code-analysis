@@ -1,5 +1,8 @@
 # 08 - Cron 调度与外部协议适配
 
+中文 | [English](../en/08-cron-and-protocols.md)
+
+
 > **本章定位**：三个独立子系统——`cron/`（3 文件，2,275 行定时调度）、`acp_adapter/`（9 文件，2,354 行编辑器协议适配）、`mcp_serve.py`（867 行 MCP 服务端）。它们共同点是把 AIAgent 的能力暴露给不同的外部调用者。
 
 ## Agent 不应该只在你说话时才工作

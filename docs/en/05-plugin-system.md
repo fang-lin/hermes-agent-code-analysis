@@ -1,5 +1,8 @@
 # 05 - Plugin System: Extending Agent Capabilities with Code
 
+[中文](../zh/05-插件系统.md) | English
+
+
 > **Chapter scope**: `plugins/` directory (41 files, 18,603 lines) + `hermes_cli/plugins.py` (plugin manager). Plugins are a runtime extension mechanism at the Python code level, complementing the natural-language-level skills system.
 > **Key classes**: `PluginContext` (`hermes_cli/plugins.py:210`), `PluginManager` (`hermes_cli/plugins.py:518`).
 

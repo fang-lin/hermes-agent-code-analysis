@@ -1,5 +1,8 @@
 # 06 - Gateway: One Process, Twenty Platforms
 
+[中文](../zh/06-gateway网关.md) | English
+
+
 > **Chapter scope**: `gateway/` directory (53 files, 64,729 lines) — the largest module in the codebase. Contains the core controller `GatewayRunner`, 28 platform adapters, session management, streaming delivery, and Cron scheduling integration.
 > **Key classes**: `GatewayRunner` (`gateway/run.py:620`), `BasePlatformAdapter` (`gateway/platforms/base.py:1121`), `SessionStore` (`gateway/session.py`).
 

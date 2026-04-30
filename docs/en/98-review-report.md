@@ -1,5 +1,8 @@
 # Review Report Summary
 
+[中文](../zh/98-审核报告汇总.md) | English
+
+
 This document aggregates the review results for each analysis step.
 
 ---
