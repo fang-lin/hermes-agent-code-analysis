@@ -78,7 +78,7 @@ The 66 tool files aren't all imported at startup — that would pull in heavy de
 flowchart TD
     FILES["tools/*.py"]
     AST["Phase 1: AST scan (no code execution)\nParse the syntax tree"]
-    CHECK{Contains registry.register() call?}
+    CHECK{"Contains registry.register() call?"}
     MARK["Mark as 'needs import'"]
     SKIP["Skip\n(e.g., registry.py itself, __init__.py)"]
     IMPORT["Phase 2: On-demand import (only for marked files)\nimport tools.file_tools → triggers module-level register() → tool registered\nimport tools.web_tools → ...\nimport tools.browser_tool → pulls in Playwright (cost paid only when needed)"]
