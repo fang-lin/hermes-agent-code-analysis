@@ -78,24 +78,72 @@ agent.close()
 
 ## 架构与实现
 
-### AIAgent 是什么角色？
+### AIAgent 是什么？
 
-`AIAgent`（`run_agent.py:326`）本质上是一个**有状态的对话协调器**。它不是模型本身，也不是工具本身——它是坐在中间的调度员，负责把用户的意图翻译成"模型调用 + 工具执行"的序列，直到任务完成。
+`AIAgent`（`run_agent.py:326`）本质上是一个**有状态的对话协调器**。它不是模型本身，也不是工具本身——如果把整个系统比作一个项目团队，LLM 是做决策的核心，工具是实际干活的执行者，那 AIAgent 就是项目经理——把任务分解成指令，发出去，收集结果，判断是否完成，决定下一步。
 
-如果 LLM 是大脑，工具是手脚，那 AIAgent 就是神经系统——接收感觉输入（用户消息），把大脑的决策（模型响应）变成动作（工具调用），再把动作的结果反馈给大脑。
+#### 四个协作方向
 
-三种调用者创建 AIAgent：
+AIAgent 和四个方向的组件交互：
 
 ```mermaid
 flowchart TD
-    CLI["CLI #40;cli.py#41;"] -->|"1 个 Agent，生命周期 = 会话"| AG["AIAgent"]
-    GW["Gateway #40;run.py#41;"] -->|"≤128 个 Agent（LRU 缓存）"| AG
-    DT["delegate_tool"] -->|"N 个子 Agent，生命周期 = 单任务"| AG
+    CALLER["调用者<br/>CLI / Gateway / 父 Agent"]
+    AGENT["AIAgent<br/>───────────────<br/>状态：会话历史、系统提示缓存、<br/>迭代预算、当前 Provider、<br/>rate limit 计数器"]
+    LLM["LLM API<br/>───────────────<br/>Anthropic / OpenAI / Bedrock /<br/>Gemini / 本地引擎 ...<br/>#40;Transport 抽象层#41;"]
+    TOOLS["工具层<br/>───────────────<br/>72 个工具<br/>含 delegate_tool<br/>→ 创建子 AIAgent"]
+    PERSIST["持久化<br/>───────────────<br/>SQLite 会话存储<br/>MEMORY.md / USER.md<br/>trajectory.jsonl<br/>checkpoint 快照"]
+
+    CALLER -->|"run_conversation#40;#41; / interrupt#40;#41;<br/>steer#40;#41; / switch_model#40;#41; / close#40;#41;"| AGENT
+    AGENT --> LLM
+    AGENT --> TOOLS
+    AGENT --> PERSIST
 ```
 
-**图：AIAgent 的三种创建者和生命周期差异**
+**图：AIAgent 与调用者、LLM API、工具层、持久化层的四向协作关系**
 
-v0.14.0 相比 v0.11.0 有一个重大架构变化：`run_agent.py` 从 13,293 行缩减到 4,309 行。核心循环被拆到了 `agent/conversation_loop.py`（4,231 行），系统提示构建拆到了 `agent/system_prompt.py`（380 行）和 `agent/prompt_builder.py`（1,465 行），Agent 初始化拆到了 `agent/agent_init.py`（1,637 行）。`run_agent.py` 里剩下的大多是 forwarder 函数——它们委托给 `agent/` 下的模块，保持了向后兼容的 API 表面。
+1. **向上（调用者）**：CLI、Gateway 或父 Agent 通过少数几个方法和 Agent 交互——`run_conversation()` 发消息拿回复（`run_agent.py:4053`）、`interrupt()` 中断（`run_agent.py:1627`）、`steer()` 温和重定向（`run_agent.py:1728`）、`switch_model()` 热切换模型（`run_agent.py:599`）、`close()` 释放资源（`run_agent.py:2099`）
+2. **向左（LLM API）**：通过 Transport 抽象层调用模型。Agent 不直接和 API 打交道——Transport 负责格式转换和协议适配
+3. **向下（工具层）**：通过 `model_tools.handle_function_call()` 调度 72 个工具。特殊的是 `delegate_tool`——它会反向创建新的 AIAgent，形成递归结构
+4. **向右（持久化）**：SQLite 存会话、MEMORY.md/USER.md 存跨会话记忆、trajectory 存训练数据、checkpoint 存文件系统快照
+
+#### AIAgent 的参数设计
+
+AIAgent 的 `__init__`（`run_agent.py:349`）接收超过 60 个参数，大致分为四组：
+
+| 组 | 典型参数 | 用途 |
+|---|---------|------|
+| 模型连接 | `base_url`、`api_key`、`provider`、`api_mode`、`model`、`fallback_model` | 连接哪个 LLM |
+| 回调接口 | `tool_*_callback`、`thinking_callback`、`reasoning_callback`、`clarify_callback`、`stream_delta_callback`、`status_callback` | Agent 运行时怎么通知调用者 |
+| 会话控制 | `session_id`、`max_iterations`、`iteration_budget`、`save_trajectories`、`checkpoints_enabled`、`prefill_messages` | 控制对话的行为和边界 |
+| Gateway 身份 | `platform`、`user_id`、`user_name`、`chat_id`、`gateway_session_key` | 消息来自哪个平台的哪个用户 |
+
+为什么这么多参数？因为 AIAgent 被三个完全不同的入口使用——CLI 需要流式回调和中断支持，Gateway 需要平台身份和会话隔离，批量运行器需要轨迹保存和预算控制。与其拆成三个子类（引入继承复杂度），不如用大参数列表配合合理的默认值，让调用方只传自己关心的部分。实际的初始化逻辑委托给 `agent/agent_init.py`（1,637 行，`run_agent.py:416-417`）。
+
+#### AIAgent 实例的生命周期
+
+Agent 实例是**长生命周期的**。在 Gateway 模式下，一个 Agent 实例可能服务同一个用户几小时甚至几天，中间处理几十次 `run_conversation()` 调用。
+
+```mermaid
+flowchart LR
+    INIT["创建 #40;__init__#41;<br/>初始化客户端、工具集、<br/>记忆管理器、压缩器"]
+    ACTIVE["活跃<br/>#40;可被反复调用#41;"]
+    RUN["run_conversation#40;#41; × N<br/>switch_model#40;#41;<br/>interrupt#40;#41; / steer#40;#41;"]
+    CLOSE["关闭 #40;close#41;<br/>终止后台进程<br/>关闭沙箱环境<br/>关闭浏览器会话<br/>中断子 Agent<br/>关闭 HTTP 客户端"]
+
+    INIT --> ACTIVE
+    ACTIVE --> RUN
+    RUN --> ACTIVE
+    ACTIVE --> CLOSE
+```
+
+**图：AIAgent 实例的生命周期——创建后可被反复调用，close() 释放所有资源**
+
+`close()`（`run_agent.py:2099`）按五个步骤释放资源：终止后台进程（ProcessRegistry）→ 清理终端沙箱 → 关闭浏览器会话 → 关闭子 Agent → 关闭 HTTP 客户端。每步独立 try-except，一步失败不影响后续清理。
+
+#### v0.14.0 的架构重构
+
+v0.14.0 相比 v0.11.0 有一个重大变化：`run_agent.py` 从 13,293 行缩减到 4,309 行。核心循环被拆到了 `agent/conversation_loop.py`（4,231 行），系统提示构建拆到了 `agent/system_prompt.py`（380 行）和 `agent/prompt_builder.py`（1,465 行），Agent 初始化拆到了 `agent/agent_init.py`（1,637 行）。`run_agent.py` 里剩下的大多是 forwarder 函数——保持了向后兼容的 API 表面，但实现委托给各子模块。
 
 ### 一次完整对话的生命周期
 
@@ -271,20 +319,97 @@ model:
 
 在 CLI 场景，用户可以用 `/model` 手动切换；但在 Gateway 场景（多用户共享同一服务），无法依赖手动干预。Fallback Chain 让 Gateway 在 Provider 故障时自动保持服务，无需任何用户介入。
 
-到目前为止讨论的机制——重试、凭证轮换、Fallback——都在处理"做同一件事但遇到了阻碍"的情况。接下来要讲的子 Agent 处理的是另一类问题：任务本身太大，一个 Agent 不够用了。
+如果没有配置 `fallback_model`，连续失败最终会返回错误给用户——这是最坏的情况，但也是明确的失败，不会静默丢消息。
+
+#### 错误恢复的三层递进
+
+重试、凭证轮转、Fallback 不是平行的三个机制——它们是**递进的三层防线**，每层解决前一层无法处理的问题：
+
+```mermaid
+flowchart TD
+    FAIL["API 调用失败"]
+    L1["第一层：重试 + 退避<br/>同一凭证、同一 Provider<br/>解决瞬时故障"]
+    L1OK["恢复 → 继续对话"]
+    L2["第二层：凭证轮转<br/>切换到池中另一个 Key<br/>解决单 Key 限流"]
+    L2OK["恢复 → 继续对话"]
+    L3["第三层：Fallback<br/>切换到另一个 Provider<br/>解决整体 Provider 故障"]
+    L3OK["恢复 → 继续对话"]
+    ERR["返回错误给用户"]
+
+    FAIL --> L1
+    L1 -->|成功| L1OK
+    L1 -->|耗尽| L2
+    L2 -->|成功| L2OK
+    L2 -->|所有 Key exhausted| L3
+    L3 -->|成功| L3OK
+    L3 -->|所有 fallback 耗尽| ERR
+```
+
+**图：错误恢复的三层递进——重试 → 凭证轮转 → Fallback，每层解决上一层无法处理的问题**
+
+排查 API 错误时，按这个顺序定位：先看日志中的重试次数（是否触发了退避？），再看凭证状态（有没有 Key 被标记为 exhausted？），最后看 Fallback 是否激活（`_fallback_activated` 标志）。
+
+### 流式响应：让等待变得可以忍受
+
+等模型生成完整响应后再一次性返回，用户体验很糟——几秒的空白等待，然后突然冒出一大段文字。流式响应让 token 在生成的同时就送达用户。
+
+但 Hermes 面临一个额外挑战：模型响应分两种——**纯文本回复**和**工具调用**。只有前者应该流式展示给用户，后者是给 Agent 自己看的内部调度指令。
+
+`_fire_stream_delta()`（`run_agent.py:3060`）是流式分发的核心。每个文本 token 到达时，它先经过两个 scrubber 过滤：`_stream_think_scrubber` 去掉推理/思考块（以 `<think>` 标签为例，不应泄露到用户界面）、`_stream_context_scrubber` 去掉内部记忆上下文标记。过滤后分发给两个回调：
+- `stream_callback`（CLI 用它驱动终端输出）
+- `stream_delta_callback`（TTS 语音合成管线用它在生成文本的同时开始朗读）
+
+**工具调用轮次完全静默**——用户不会看到"我要搜索一下网页"这样的中间文字逐字蹦出来。Hermes 用工具进度回调（`tool_progress_callback`）和 `KawaiiSpinner` 动画替代，保持输出区干净。
+
+流式传输中如果连续 180 秒没有收到新 token（`HERMES_STREAM_STALE_TIMEOUT` 环境变量可调，定义在 `agent/chat_completion_helpers.py:1986`），会被判定为 stale stream 并触发重试——这是为了应对 Provider 侧的 SSE 连接假死（连接未断但不再推送数据）。本地引擎（以 Ollama 为例）默认不启用超时检测（`chat_completion_helpers.py:1991`），因为本地推理速度取决于硬件，可能合理地比 180 秒更慢。
+
+到目前为止讨论的机制——缓存、流式、重试、凭证轮换、Fallback——都在处理"做同一件事但遇到了阻碍"或"怎么把结果交付给用户"。接下来要讲的子 Agent 处理的是另一类问题：任务本身太大，一个 Agent 不够用了。
 
 ### 子 Agent：横向分拆任务
 
-`tools/delegate_tool.py` 让 Agent 能 spawn 子 Agent。子 Agent 运行在 `ThreadPoolExecutor` 中，默认最多 3 个并发（`_DEFAULT_MAX_CONCURRENT_CHILDREN = 3`，`delegate_tool.py:132`），共享父的 `iteration_budget`。
+用户说"分析这三个文件然后写一份报告"——分析可以并行，写报告要等分析完成。如果单个 Agent 串行做，时间是三倍。`tools/delegate_tool.py` 让 Agent 能 spawn 子 Agent 并行处理子任务。
 
-安全隔离是核心考量。子 Agent 的工具集是父的**子集**，且五个工具被强制禁用（`DELEGATE_BLOCKED_TOOLS`，`delegate_tool.py:45`）：
-- `delegate_task` — 防递归（除非 role 是 orchestrator）
-- `clarify` — 子 Agent 在后台线程，没有 stdin
-- `memory` — 避免并发写 MEMORY.md
-- `send_message` — 防擅自发消息
-- `execute_code` — 强制逐步推理
+```mermaid
+flowchart TD
+    PARENT["父 Agent #40;depth=0#41;<br/>模型输出: delegate_task#40;tasks=[...]#41;"]
+    A["子 Agent A #40;depth=1#41;<br/>分析文件 X"]
+    B["子 Agent B #40;depth=1#41;<br/>分析文件 Y"]
+    C["子 Agent C #40;depth=1#41;<br/>分析文件 Z"]
+    MERGE["全部完成，结果汇总返回父 Agent"]
+    CONT["父 Agent 继续：根据分析结果写报告"]
 
-嵌套深度默认 1 层（`MAX_DEPTH = 1`，`delegate_tool.py:133`），可通过 `delegation.max_spawn_depth` 放宽到最多 3 层。
+    PARENT -->|并行，最多 3 个| A
+    PARENT --> B
+    PARENT --> C
+    A --> MERGE
+    B --> MERGE
+    C --> MERGE
+    MERGE --> CONT
+```
+
+**图：父 Agent 并行分拆三个子 Agent，汇总后继续执行**
+
+子 Agent 运行在 `ThreadPoolExecutor` 中，默认最多 3 个并发（`_DEFAULT_MAX_CONCURRENT_CHILDREN = 3`，`delegate_tool.py:132`），共享父的 `iteration_budget`——如果父预算 90 次迭代，三个子 Agent 加起来也只能用这 90 次中剩下的部分。
+
+#### 安全隔离
+
+子 Agent 不是父的完整克隆。它的工具集是父的**子集**（取交集，`delegate_tool.py:891-930`），且五个工具被强制禁用（`DELEGATE_BLOCKED_TOOLS`，`delegate_tool.py:45`）：
+
+| 禁用的工具 | 原因 |
+|-----------|------|
+| `delegate_task` | 防止无限递归（除非 role 是 `orchestrator`）|
+| `clarify` | 子 Agent 在后台线程，没有 stdin，无法交互 |
+| `memory` | 避免多个子 Agent 并发写 MEMORY.md 导致冲突 |
+| `send_message` | 防止子 Agent 擅自给用户发消息 |
+| `execute_code` | 强制逐步推理，不走捷径 |
+
+嵌套深度默认 1 层（`MAX_DEPTH = 1`，`delegate_tool.py:133`）——父 spawn 子，但子不能再 spawn 孙。可通过 `delegation.max_spawn_depth` 放宽到最多 3 层。如果需要更深嵌套，给子 Agent 设置 `role: "orchestrator"` 让它保留 `delegate_task` 工具。
+
+#### 审批和错误处理
+
+子 Agent 运行在独立线程中，缺少 CLI 的交互上下文。如果子 Agent 要执行危险命令（以 `rm -rf` 为例），父 Agent 的审批回调对它不可见。默认行为是 `_subagent_auto_deny`（`delegate_tool.py:69`）——自动拒绝所有需要审批的操作。对于 cron 任务或批量运行场景，可以配置 `delegation.subagent_auto_approve` 放开限制。
+
+如果子 Agent 崩溃（异常退出），`ThreadPoolExecutor` 会捕获异常，父 Agent 收到一个包含错误信息的结果——不会导致父 Agent 崩溃。`_active_subagents` 注册表（`delegate_tool.py:151`）让 TUI 界面可以实时显示当前有多少子 Agent 在运行、各自在做什么，并支持单独中断某个子 Agent。
 
 无论是单 Agent 还是多层子 Agent，每次对话运行结束时，系统都可以把完整的执行轨迹保存下来——这就是 Trajectory 机制存在的原因。
 
@@ -302,9 +427,26 @@ model:
 
 同一个模型通过不同路径访问，参数可能完全不同——以 GPT-5.5 为例，通过 Codex OAuth 是 272K 上下文，直连 OpenAI API 是 1.05M。本地模型的上下文取决于 GPU 显存分配。有些 Provider 的 API 根本不返回元数据。
 
-Model Metadata 实现了一条十余级 fallback 链来解析上下文长度（`get_model_context_length()`，`model_metadata.py:1430`）：配置覆盖 → 持久化缓存 → Bedrock 静态表 → 端点 API 探测 → 本地服务器查询 → OpenRouter API → models.dev 注册表 → 硬编码默认值 → 最终兜底 256K。
+`get_model_context_length()`（`model_metadata.py:1430`）实现了一条十余级 fallback 链：
 
-过度设计了吗？考虑到 Hermes 支持 35 种 Provider 和本地引擎，每个都有自己的元数据查询方式（或者根本没有），这条 fallback 链是实际需求驱动的。
+```
+0.  config.yaml 显式覆盖 → 用户设了就用这个，不再往下查
+0b. custom_providers 逐模型配置
+1.  持久化缓存 (~/.hermes/context_length_cache.yaml) → 命中则跳过网络查询
+1b. AWS Bedrock 静态表 → 紧跟缓存，不走网络探测
+2.  自定义端点 /models API 探测
+3.  本地服务器（Ollama /api/show、LM Studio、llama.cpp /v1/props）
+4.  Anthropic /v1/models API
+5.  Provider 感知查询（Copilot /models、Nous 后缀匹配、Codex OAuth）
+6.  OpenRouter API + models.dev 注册表
+8.  硬编码默认值表（模糊匹配，最长 key 优先）
+9.  本地服务器最后兜底（再试一次）
+10. 最终 fallback → 256K
+```
+
+查到的结果会被缓存：OpenRouter 元数据缓存 1 小时，自定义端点缓存 5 分钟。如果所有级别都没命中，兜底到 256K（`DEFAULT_FALLBACK_CONTEXT = CONTEXT_PROBE_TIERS[0]`，`model_metadata.py:128`）——这个值足够大多数模型工作，但如果实际上下文比 256K 小，压缩器会在运行时自动修正。
+
+过度设计了吗？考虑到 Hermes 支持 35 种 Provider 和本地引擎，每个都有自己的元数据查询方式（或者根本没有），这条 fallback 链是实际需求驱动的。排查"上下文长度不对"的问题时，从这条链的第 0 级往下检查即可定位是哪个数据源返回了错误值。
 
 ### Display 和 Insights：可观测性
 
