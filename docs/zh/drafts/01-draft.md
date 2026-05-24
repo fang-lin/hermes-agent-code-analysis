@@ -96,51 +96,44 @@ display:
 
 ## 架构与实现
 
-### 从底层到入口：六层结构
+hermes_cli 的 97 个文件回答的是五个用户会在不同时刻遇到的问题。每个问题对应一组模块，理解了问题就理解了模块存在的原因。
 
-hermes_cli 的 97 个文件不是平铺的——它们有清晰的分层。理解这个分层，就理解了"一个 `hermes` 命令执行时，代码是怎么一层层往下调用的"。
+### 我怎么配置它？—— 配置系统
 
-```mermaid
-graph TD
-    L6["入口层<br/>main.py #40;13,847 行#41;<br/>argparse 树 + cmd_* 分发"]
-    L5["服务管理层<br/>gateway.py #40;5,445 行#41;<br/>进程生命周期、systemd/launchd"]
-    L4["配置 UI 层<br/>setup.py / tools_config.py / skills_config.py<br/>交互式向导和工具管理"]
-    L3["扩展层<br/>plugins.py / commands.py / skin_engine.py<br/>插件管理、斜杠命令注册、主题"]
-    L2["运行时解析层<br/>runtime_provider.py / model_switch.py<br/>每次 Agent 调用时解析 Provider 和模型"]
-    L1["认证层<br/>auth.py #40;7,605 行#41;<br/>PROVIDER_REGISTRY、OAuth/API Key 管理"]
-    L0["基础设施层<br/>config.py #40;5,598 行#41; / profiles.py #40;1,470 行#41;<br/>配置加载/保存、Profile 隔离"]
+你安装完 hermes-agent，第一件事是配置。但 hermes-agent 有约 1100 行可调参数——从模型选择、终端后端到安全策略、显示主题，几乎每个行为都能调。如果把这些全放环境变量，你的 shell 启动命令会变成一条怪兽级的 `export` 语句。
 
-    L6 --> L5
-    L6 --> L4
-    L4 --> L3
-    L3 --> L2
-    L2 --> L1
-    L1 --> L0
-```
+hermes-agent 的解决方案是 **config.py**（5,598 行）。`DEFAULT_CONFIG`（`config.py:503`）是一个 1289 行的嵌套字典，定义了所有合法的配置键和默认值。用户的 `~/.hermes/config.yaml` 只需要覆盖想改的字段，加载时和 `DEFAULT_CONFIG` 做深度合并（`_deep_merge()`，`config.py:4127`），其余自动取默认值。配置中的 `${VAR}` 引用在加载时被展开（`_expand_env_vars()`，`config.py:4147`），所以你可以写 `api_key: "${OPENROUTER_API_KEY}"` 让配置文件引用环境变量而不暴露密钥。
 
-**图：hermes_cli 的六层内部结构（箭头为依赖方向，即上层依赖下层；文章按从底层 L0 到入口 L6 的顺序讲解）**
+一个精妙的细节：`load_config()`（`config.py:4377`）用文件的 `(mtime_ns, size)` 作为缓存键。不需要显式的失效信号——文件一改缓存自动过期。这对长时间运行的 Gateway 进程很重要：用户随时可以编辑 `config.yaml`，下一次 Agent 调用就会自动读到新配置，不需要重启任何进程。
 
-#### Layer 0：基础设施——配置和 Profile
+版本升级时配置文件怎么办？`migrate_config()`（`config.py:3548`）做增量迁移——新版本增加了字段，迁移函数自动补上，用户无感知。
 
-最底层是两个基础模块：
+但如果你需要为不同项目使用完全不同的配置——一个用 Claude 做代码审查，一个用 DeepSeek 做数据分析——单个 config.yaml 就不够了。
 
-**config.py**（5,598 行）管理配置的全生命周期。`DEFAULT_CONFIG`（`config.py:503`）是一个 1289 行的嵌套字典，定义了所有合法的配置键和默认值。加载时先读用户文件，然后和 `DEFAULT_CONFIG` 做深度合并（`_deep_merge()`，`config.py:4127`）——用户只需要覆盖想改的字段，其余自动取默认值。配置中的 `${VAR}` 引用在加载时被展开（`_expand_env_vars()`，`config.py:4147`）。
-
-为什么不用环境变量直接驱动所有配置？因为 hermes-agent 的配置项太多（约 1100 行可调参数），全放环境变量既不可读也不可维护。YAML 文件提供了结构化的层次，环境变量只用于覆盖少数敏感项（API Key）。
-
-配置还有增量迁移机制（`migrate_config()`，`config.py:3548`）——当新版本增加了配置字段，用户升级后旧文件不会出错，迁移函数自动补上新字段。
+### 我怎么隔离多个环境？—— Profile 系统
 
 **profiles.py**（1,470 行）实现了多 Profile 隔离。每个 Profile 是 `~/.hermes/profiles/<name>/` 下的一个完整 HERMES_HOME 副本：独立的 `config.yaml`、`.env`、`sessions/`、`memories/`、`skills/`、`cron/`。Profile 之间完全隔离——一个 Profile 的记忆不会泄漏到另一个。
 
-Profile 切换有一个反直觉的设计：`main.py` 在任何模块 import 之前就解析 `--profile/-p` 参数（`_apply_profile_override()`，`main.py:183`），直接修改 `os.environ["HERMES_HOME"]`。为什么这么早？因为 `get_hermes_home()`（`hermes_constants.py:43`）被 30+ 个模块在 import 时调用——如果 Profile 切换发生在 import 之后，这些模块已经用了默认路径，切换就无效了。这是一种"越早越好"的策略，代价是需要在 argparse 之前手动解析 `sys.argv`。
+Profile 切换有一个反直觉的设计：`main.py` 在任何模块 import 之前就解析 `--profile/-p` 参数（`_apply_profile_override()`，`main.py:183`），直接修改 `os.environ["HERMES_HOME"]`。
+
+```mermaid
+flowchart LR
+    A["sys.argv 解析<br/>提取 --profile/-p"] --> B["设置 HERMES_HOME<br/>→ ~/.hermes/profiles/dev/"]
+    B --> C["Python import<br/>30+ 模块调用 get_hermes_home#40;#41;"]
+    C --> D["所有路径指向<br/>正确的 Profile 目录"]
+```
+
+**图：Profile 切换必须在 import 之前完成——否则 30+ 个模块会使用错误的路径**
+
+为什么这么早？因为 `get_hermes_home()`（`hermes_constants.py:43`）被 30+ 个模块在 import 时调用——如果 Profile 切换发生在 import 之后，这些模块已经用了默认路径，切换就无效了。代价是需要在 argparse 之前手动解析 `sys.argv`，但这是唯一可行的方案。
 
 配置和 Profile 就位之后，下一个问题才有意义：这个配置里声明的 Provider，凭什么相信你是你？
 
-#### Layer 1：认证——35 种 Provider 的身份管理
+### 它怎么知道我是谁？—— 认证系统
 
-**auth.py**（7,605 行）管理的就是这个问题：**用户的 API Key 或 OAuth token 从哪里来？**
+**auth.py**（7,605 行）管理的就是身份问题。hermes-agent 支持 35 种 Provider，每种的认证方式都不一样——有的用 API Key，有的用 OAuth，有的用 AWS IAM。如果为每种 Provider 写一套独立的认证逻辑，代码会爆炸。
 
-`PROVIDER_REGISTRY`（`auth.py:183`）是一个静态注册表，列出了 35 种已知的 Provider，每个用 `ProviderConfig` 数据类（字段包括 `id`、`name`、`auth_type`、`inference_base_url`、`api_key_env_vars` 等，`auth.py:167`）描述其身份信息。认证方式分六种：
+`PROVIDER_REGISTRY`（`auth.py:183`）是一个统一的注册表，用 `ProviderConfig` 数据类（`auth.py:167`，字段包括 `id`、`name`、`auth_type`、`inference_base_url`、`api_key_env_vars` 等）描述每个 Provider 的身份信息。35 种 Provider 归纳为六种认证方式：
 
 | 认证方式 | 适用 Provider | 机制 |
 |---------|--------------|------|
@@ -155,11 +148,13 @@ Profile 切换有一个反直觉的设计：`main.py` 在任何模块 import 之
 
 一个重要的设计：`PROVIDER_REGISTRY` 虽然是静态定义的，但在模块加载时会自动扩展（`auth.py:459`）——它扫描 `plugins/model-providers/` 下的插件，把插件注册的 Provider 也加入注册表。这意味着新增一个 Provider 只需要写一个插件目录，不需要改 `auth.py`。
 
-#### Layer 2：运行时解析——从配置到可用凭证的翻译器
+但身份验证只回答了"你是谁"。Agent 每次调用模型时，还需要知道"往哪发请求、用什么协议"。
 
-Agent 核心需要三件事才能调用模型：往哪发请求（`base_url`）、用什么身份（`api_key`）、用哪种 API 协议（`api_mode`——比如 OpenAI 兼容的 `chat_completions` 模式，或原生 Anthropic 的 `anthropic_messages` 模式）。把用户说的"我要用 OpenRouter 的 Claude"翻译成这个三元组，就是 **runtime_provider.py**（1,668 行）做的事。
+### 它怎么选对模型？—— Provider 运行时解析
 
-`resolve_runtime_provider()`（`runtime_provider.py:1200`）是这个翻译的入口，每次 Agent 调用模型时都会执行。它有一个精心设计的优先级链：
+用户说"我要用 OpenRouter 的 Claude"，但 Agent 核心需要的是一个精确的三元组：往哪发请求（`base_url`）、用什么身份（`api_key`）、用哪种 API 协议（`api_mode`——比如 OpenAI 兼容的 `chat_completions` 模式，或原生 Anthropic 的 `anthropic_messages` 模式）。
+
+**runtime_provider.py**（1,668 行）负责这个翻译。`resolve_runtime_provider()`（`runtime_provider.py:1200`）每次 Agent 调用模型时都会执行，走一条精心设计的优先级链：
 
 ```mermaid
 flowchart TD
@@ -183,56 +178,63 @@ flowchart TD
     G -->|否| I --> J
 ```
 
-**图：runtime_provider 的凭证解析优先级链**
+**图：runtime_provider 的凭证解析优先级链——Credential Pool 是可选的多 Key 轮转机制（详见第 02 章）**
 
 为什么不直接读配置文件拿 API Key？因为现实比这复杂得多：OAuth token 需要刷新、Credential Pool 需要轮转限流的 Key、Azure 需要特殊处理 Entra ID 认证、自定义 Provider 的 base_url 可能来自环境变量。这个函数把所有复杂性集中在一处，Agent 核心只需要拿到一个干净的三元组。
 
 **model_switch.py**（1,799 行）处理模型切换——当用户输入 `/model sonnet` 时，它需要把别名解析为完整的 `(provider, model_id)`。`resolve_alias()`（`model_switch.py:450`）会依次查找：`config.yaml` 的 `model_aliases:` 节（用户自定义别名）→ Provider 模型目录 → 模糊匹配。
 
-#### Layer 3：扩展——插件、命令、主题
+### 我怎么扩展它？—— 插件、命令、主题
 
-**plugins.py**（1,725 行）是插件系统的管理器。`PluginManager`（`plugins.py:883`）负责从四个来源发现插件：
+一个框架如果不能扩展，就会被 fork。hermes_cli 提供了三个正式的扩展机制。
 
-1. `<repo>/plugins/` — 内置插件（16 个类别）
-2. `~/.hermes/plugins/` — 用户插件
-3. `./.hermes/plugins/` — 项目级插件（需要 `HERMES_ENABLE_PROJECT_PLUGINS` 开启）
-4. pip entry-points 组 `hermes_agent.plugins`
+**插件系统。** `PluginManager`（`plugins.py:883`）从四个来源发现插件：内置（`<repo>/plugins/`，16 个类别）、用户（`~/.hermes/plugins/`）、项目级（`./.hermes/plugins/`，需开启 `HERMES_ENABLE_PROJECT_PLUGINS`）、pip entry-points。每个插件通过 `PluginContext` 对象（`plugins.py:287`）注册工具、钩子和命令。钩子系统支持 17 种生命周期事件（`VALID_HOOKS`，`plugins.py:128`），覆盖工具调用、用户审批、网关消息分发等关键节点——插件可以在任意一个节点注入自定义逻辑。详见第 06 章。
 
-每个插件有一个 `plugin.yaml` 清单（`PluginManifest`，`plugins.py:234`），声明它提供什么工具、注册什么钩子、需要什么环境变量。插件通过 `PluginContext` 对象（`plugins.py:287`）注册自己的能力：`ctx.register_tool()`、`ctx.register_hook()`、`ctx.register_command()`。
+**斜杠命令。** `COMMAND_REGISTRY`（`commands.py:64`）是约 70 个命令定义的单一注册表。同一份注册表被 CLI、Gateway、Telegram Bot、Discord Slash Commands、Slack App Manifest 共用——不同平台通过 `cli_only`/`gateway_only` 标记过滤。
 
-钩子系统支持 17 种生命周期事件（`VALID_HOOKS`，`plugins.py:128`），覆盖工具调用（`pre_tool_call`/`post_tool_call`）、用户审批流程（`pre_approval_request`/`post_approval_response`）、网关消息分发（`pre_gateway_dispatch`）等关键节点——插件可以在任意一个节点注入自定义逻辑。完整的钩子列表见 `plugins.py:128`。
+**主题引擎。** `skin_engine.py`（926 行）是纯数据驱动的——9 个内置主题（default、ares、mono、slate 等），用户放一个 YAML 文件到 `~/.hermes/skins/` 就能自定义颜色、spinner 动画、品牌文案。不需要改代码。
 
-**commands.py**（1,819 行）维护了一个单一的斜杠命令注册表（`COMMAND_REGISTRY`，`commands.py:64`），约 70 个命令定义（含别名约 90 个入口）。同一份注册表被 CLI、Gateway、Telegram Bot、Discord Slash Commands、Slack App Manifest 共用——不同平台通过 `cli_only`/`gateway_only` 标记过滤。
-
-**skin_engine.py**（926 行）是纯数据驱动的主题引擎。9 个内置主题（default、ares、mono、slate、daylight、warm-lightmode、poseidon、sisyphus、charizard），用户可以在 `~/.hermes/skins/` 下放 YAML 文件自定义颜色、spinner 动画、品牌文案。不需要改代码。
-
-以上三层——扩展、运行时解析、认证——都是在每次 Agent 调用时"动态工作"的层。再往上的三层则偏重于"一次性准备"：配置向导只在首次设置时运行，网关服务一次启动长期存活，入口函数只在命令启动时执行一次。
-
-#### Layer 4-6：配置 UI、服务管理、入口
-
-**setup.py**（3,607 行）是交互式配置向导的编排器。它本身不实现任何配置逻辑——每个步骤都委托给专门的模块（`tools_config.py`、`skills_config.py`、`gateway.py` 等）。
+### 网关谁来管？—— 服务生命周期
 
 **gateway.py**（5,445 行）管理网关进程的完整生命周期：启动、停止、重启、安装为系统服务、诊断。它的 OS 感知设计覆盖了 systemd（Linux，用户和系统两种 scope）、launchd（macOS）、手动进程跟踪（Windows/WSL/Docker），回退到 `gateway.pid` 文件。
 
-**main.py**（13,847 行）是整个模块最大的文件，也是 `hermes` 命令的入口。它构建 argparse 解析树，为每个子命令定义一个 `cmd_*` 函数。但这些函数大多是薄代理——它们 import 对应的子模块然后委托执行。这种"入口文件不做事"的模式让每个子命令的启动只加载它需要的模块。
+**setup.py**（3,607 行）是交互式配置向导的编排器，分五个步骤（选 Provider → 选终端后端 → 设 Agent 参数 → 配消息平台 → 配工具集）。它本身不实现任何配置逻辑——每个步骤都委托给专门的模块。
 
-main.py 还包含约 19 个 per-Provider 的模型配置流程（`_model_flow_*()`），覆盖了 Nous Portal、OpenRouter、Anthropic、Bedrock、Gemini、Kimi、MiniMax 等支持的 Provider。这些流程处理 OAuth 登录、API Key 验证、模型选择等交互逻辑。
+**main.py**（13,847 行）是 `hermes` 命令的入口，构建 argparse 解析树，为每个子命令定义 `cmd_*` 函数。这些函数大多是薄代理——import 对应的子模块然后委托执行，让每个子命令的启动只加载它需要的模块。main.py 还包含约 19 个 per-Provider 的模型配置流程（`_model_flow_*()`），处理 OAuth 登录、API Key 验证、模型选择等交互逻辑。
 
-### 回调桥接：Agent 线程和 TUI 线程的协调
+### 两个横切问题
 
-六层结构描述的是"命令到模块"的静态调用路径。但 hermes_cli 还承担着另一类工作：Agent 在执行工具时，可能随时需要用户交互（澄清问题、审批危险命令、输入 API Key）——这是一个运行时的动态问题，超出了分层模型的范围。
+以上五个问题覆盖了 hermes_cli 的主线功能。但还有两个问题横跨多个模块，不属于任何一个问题域。
 
-`callbacks.py`（242 行）专门解决这个并发问题：Agent 的工具系统在后台线程中运行，但某些操作需要用户交互（澄清问题、审批危险命令、输入 API Key）。用户交互发生在 prompt_toolkit 的主线程事件循环中。两个线程怎么协调？
+#### Agent 线程和 TUI 线程怎么协调？
 
-三个回调函数——`clarify_callback()`、`approval_callback()`、`prompt_for_secret()`——都用同一个模式：设置 CLI 状态 → 让 TUI 刷新界面 → 在 `queue.Queue` 上阻塞等待用户响应，每秒轮询一次检查超时。这是一个经典的线程间通信模式，用队列避免了共享状态的锁竞争。
+Agent 的工具系统在后台线程中运行，但某些操作需要用户交互——澄清问题、审批危险命令、输入 API Key。用户交互发生在 prompt_toolkit 的主线程事件循环中。两个线程怎么协调？
 
-### Kanban 子系统
+`callbacks.py`（242 行）用一个经典的模式解决：三个回调函数（`clarify_callback()`、`approval_callback()`、`prompt_for_secret()`）都设置 CLI 状态 → 让 TUI 刷新界面 → 在 `queue.Queue` 上阻塞等待用户响应，每秒轮询一次检查超时。用队列避免了共享状态的锁竞争。
 
-`kanban.py`（2,762 行）+ `kanban_db.py`（6,579 行）是一个完整的多 Agent 协作系统。每个看板是一个独立的 SQLite 数据库（`kanban_db.py:1135`），支持 DAG 任务依赖（`_would_cycle()`，`kanban_db.py:1906`）、乐观锁任务认领（UUID + TTL）、断路器（`consecutive_failures` + `max_retries`）。
+#### Kanban 为什么在 hermes_cli 里？
 
-为什么看板用独立 SQLite 文件而不是共享数据库？因为每个看板的备份和归档变得简单——直接复制 .db 文件。而且不同看板之间没有锁竞争。
+`kanban.py`（2,762 行）+ `kanban_db.py`（6,579 行）是一个完整的多 Agent 协作系统——看板、DAG 任务依赖（`_would_cycle()`，`kanban_db.py:1906`）、乐观锁认领（UUID + TTL）、断路器（`consecutive_failures` + `max_retries`）。每个看板是一个独立的 SQLite 文件，备份和归档只需复制 .db 文件。
 
-虽然 Kanban 是一个完整的子系统，但它的管理入口（`kanban.py`）和持久化层（`kanban_db.py`）物理上驻留在 `hermes_cli/` 目录中——这是为了让用户可以用 `hermes kanban` 子命令直接操作看板，无需启动完整 Agent。详细的 DAG 任务调度和多 Agent 协作机制在第 10 章展开。
+它驻留在 `hermes_cli/` 而不是独立模块，是因为用户通过 `hermes kanban` 子命令直接操作看板，无需启动完整 Agent。详细的 DAG 任务调度和多 Agent 协作机制在第 10 章展开。
+
+### 全景总结
+
+```mermaid
+graph TD
+    Q1["我怎么配置它？<br/>config.py + profiles.py"]
+    Q2["它怎么知道我是谁？<br/>auth.py"]
+    Q3["它怎么选对模型？<br/>runtime_provider.py + model_switch.py"]
+    Q4["我怎么扩展它？<br/>plugins.py + commands.py + skin_engine.py"]
+    Q5["网关谁来管？<br/>gateway.py + setup.py + main.py"]
+
+    Q5 --> Q4
+    Q4 --> Q3
+    Q3 --> Q2
+    Q2 --> Q1
+```
+
+**图：hermes_cli 五个问题的依赖关系——上层问题依赖下层问题先被解决**
 
 ### 代码组织
 
