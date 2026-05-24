@@ -63,35 +63,28 @@
 3. **过章节模板底部的自检清单**（使用指南、架构与实现、9 问覆盖、通用检查），逐项确认
 4. **立即将草稿保存到文件**（`docs/zh/drafts/XX-章节名-draft.md`），不要只存在上下文中
 
-### 步骤 3：并行审核（两个 sonnet Agent，互不可见）
+### 步骤 3：文学性审核（sonnet）
 
-1. 读取 `prompts/factual-review.md`，启动事实审核 Agent
-2. 读取 `prompts/literary-review.md`，启动文学性审核 Agent
-3. 两个 Agent 并行运行，各自独立产出审核报告
-4. **立即将审核报告保存到文件**：
-   - `docs/zh/reviews/XX-factual-review.md`
-   - `docs/zh/reviews/XX-literary-review.md`
+1. 读取 `prompts/literary-review.md`，启动文学性审核 Agent
+2. **立即将审核报告保存到文件**：`docs/zh/reviews/XX-literary-review.md`
 
-### 步骤 4：二次验证（主线 opus）
+### 步骤 4：整合文学性建议（主线 opus）
+
+1. 采纳合理的文学性改进建议，修改草稿
+2. 同时整合已知的事实修正（如有）
+3. 写入正式文件：`docs/zh/XX-章节标题.md`
+
+### 步骤 5：事实审核（sonnet）
+
+1. 读取 `prompts/factual-review.md`，启动事实审核 Agent，**审核正式文档（最终版本）**
+2. **立即将审核报告保存到文件**：`docs/zh/reviews/XX-factual-review.md`
+
+### 步骤 6：二次验证 + 修正（主线 opus）
 
 1. 读取事实审核报告中所有 ⚠️ 和 ❌ 项
 2. 对每一项，自己独立读源码验证
-3. 记录验证结果：确认/推翻审核 Agent 的判断
-4. 如果 opus 验证结果和审核 Agent 不一致，以 opus 实际读码结果为准
-
-### 步骤 5：写入正式文档（主线 opus）
-
-1. 基于草稿，整合以下修改：
-   - 事实审核确认的 ❌ 项：修正
-   - 事实审核确认的 ⚠️ 项：修正或标注"待确认"
-   - 文学性审核的改进建议：采纳合理的
-2. 写入正式文件：`docs/zh/XX-章节标题.md`
-3. commit hash 填入文档头部
-
-### 步骤 6：增量复核（sonnet）
-
-1. 对步骤 5 中因文学性建议而修改的段落，启动事实审核 Agent 做增量复核
-2. 确保文学性修改没有引入新的事实错误
+3. 如果 opus 验证结果和审核 Agent 不一致，以 opus 实际读码结果为准
+4. 修正正式文档中确认的错误
 
 ### 步骤 7：更新元数据（主线 opus）
 
