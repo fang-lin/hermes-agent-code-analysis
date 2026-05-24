@@ -240,7 +240,122 @@ flowchart LR
 
 **图：一条消息从输入到回复的完整路径**
 
-这个循环看起来简单，但它要处理的边界情况极多：上下文溢出时自动压缩、Provider 限流时切换凭证、网络断连时重试退避、子代理的生命周期管理、安全审批流程——这些都在后续章节展开。
+这个循环看起来简单，但它要处理的边界情况极多。下面逐站展开。
+
+### 一条消息的旅程
+
+#### 第一站：CLI 捕获你的输入
+
+一切从 `cli.py` 的主循环开始。`HermesCLI` 类用 `prompt_toolkit` 构建了一个交互式 REPL。用户输入通过 TextArea 捕获，放入一个线程安全的队列。主线程以 100ms 间隔轮询这个队列，拿到输入后判断是斜杠命令还是普通消息——如果是普通消息，在一个**后台 daemon 线程**中启动 Agent 调用。
+
+为什么用后台线程？因为主线程需要保持响应——用户随时可能按 Ctrl+C 中断，或者输入新消息覆盖当前任务。如果 Agent 调用阻塞了主线程，这些操作就做不到了。
+
+#### 第二站：Agent 核心循环
+
+`AIAgent.run_conversation()`（`run_agent.py:3525`）是整个系统的心脏。它的核心是一个 while 循环，默认最多迭代 90 次（`max_iterations`，`run_agent.py:360`）。还有第二道限制——`iteration_budget`——这是一个父子 Agent 共享的预算对象，防止子 Agent 失控消耗所有迭代次数。
+
+在进入循环之前，`run_conversation()` 做三件准备工作：
+
+**系统提示词构建**（`_build_system_prompt()`，`run_agent.py:2206`）。这不是一段固定文本，而是一个多层三明治：
+
+```mermaid
+flowchart TD
+    L1["1. Agent 身份 — SOUL.md 或默认身份"]
+    L2["2. 用户/网关系统消息"]
+    L3["3. 持久化记忆快照 — MEMORY.md + USER.md"]
+    L4["4. 技能系统提示"]
+    L5["5. 上下文文件 — AGENTS.md / .cursorrules"]
+    L6["6. 当前日期与时间（构建时冻结）"]
+    L7["7. 平台格式化提示"]
+    Extra["+ 帮助引导、工具行为引导等（按条件追加）"]
+    L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> Extra
+```
+
+**图：系统提示词的七层三明治结构**
+
+关键设计：这个系统提示**在会话内只构建一次**，之后缓存在 `_cached_system_prompt`。为什么？因为 Anthropic 等 Provider 支持 prefix caching——如果每次请求的系统提示字节相同，服务端可以复用之前的 KV cache，大幅降低延迟和成本。动态信息（以记忆检索结果为例）注入到**用户消息**而非系统提示——这就是 Hermes 的"双注入"策略：
+
+```mermaid
+graph LR
+    subgraph SP ["系统提示（稳定前缀）"]
+        M1["MEMORY.md 快照（静态）"]
+        M2["→ 不变，保证缓存命中"]
+    end
+    subgraph UM ["用户消息（每次不同）"]
+        D1["MemoryManager 检索结果（动态）"]
+        D2["→ 每次不同，不影响缓存"]
+    end
+```
+
+**图：记忆双注入——静态快照入系统提示保证缓存，动态检索入用户消息保证时效**
+
+**上下文压缩**。如果历史消息太长，在进入循环前就会做压缩——细节在前文"问题四"已经讲过。
+
+#### 第三站：跨越 Provider 的鸿沟
+
+循环里每次调用模型，都要面对一个问题：不同 Provider 的 API 格式完全不同。Anthropic 用独立的 `system` 参数；OpenAI 把 system message 塞在 messages 数组里；AWS Bedrock 有自己的 Converse API；OpenAI Codex 用 Responses API。
+
+Hermes 的解决方案是 `ProviderTransport` 抽象基类（`agent/transports/base.py:16`）。不管底层 API 长什么样，对 Agent 来说每次调用只有四个步骤：`convert_messages()` → `convert_tools()` → `build_kwargs()` → `normalize_response()`。
+
+```mermaid
+graph TD
+    Agent["AIAgent<br/>统一调用接口"] --> ABC["ProviderTransport ABC<br/>4 个方法抹平差异"]
+    ABC --> CC["ChatCompletionsTransport<br/>OpenAI / OpenRouter / Gemini / 本地引擎"]
+    ABC --> AT["AnthropicTransport<br/>Anthropic 直连"]
+    ABC --> BT["BedrockTransport<br/>AWS Bedrock"]
+    ABC --> RT["ResponsesApiTransport<br/>OpenAI Codex / xAI"]
+```
+
+**图：Transport 抽象层将 20+ 个 Provider 统一为四种实现**
+
+为什么不用更简单的 if-else 分支？Hermes 早期就是这么做的，但随着 Provider 从几个增长到 20+，if-else 让 `run_agent.py` 变得不可维护，于是提取为独立的 Transport 层。新增一个 Provider 只需实现四个方法，不需要改动 Agent 核心。如果某个 Transport 有 bug，影响范围被限制在使用该 Transport 的 Provider 内。
+
+#### 第四站：工具执行
+
+当模型响应包含工具调用时，`_execute_tool_calls()`（`run_agent.py:3964`）会判断这批调用是否可以并行：只读工具（以 `read_file`、`web_search` 为例）总是可以并行；有副作用的工具串行执行。完全串行太慢，完全并行可能有竞态——按副作用分类是一个务实的折中。
+
+工具的自注册模式在前文"项目结构"中已概述。更细节的注册流程、安全防线、终端后端在第 03 章展开。
+
+#### 第五站：子 Agent
+
+有时候一个 Agent 不够用。`delegate_task` 工具（`tools/delegate_tool.py`）让 Agent 能 spawn 子 Agent 并行处理子任务。子 Agent 是 Agent 核心的递归使用——`delegate_tool` 是唯一一个会反向创建新 `AIAgent` 的工具。子 Agent 共享父的迭代预算、只能使用父的工具子集、默认不能再嵌套。详细的隔离机制在第 02 章展开。
+
+### 网关层：同一个 Agent，二十个平台
+
+到目前为止一直在讲 CLI 入口。但 Hermes 的另一个重要入口是消息网关。
+
+`GatewayRunner`（`gateway/run.py:1547`）是核心控制器。它和 Agent 之间隔着一个 **Agent 缓存**（`_agent_cache`，`run.py:1649`），按 session_key 索引，同一个聊天窗口复用同一个 `AIAgent` 实例。缓存上限 128 个（`_AGENT_CACHE_MAX_SIZE`，`run.py:64`），按 LRU 淘汰。被淘汰的会话下次收到消息时重新创建 Agent 并从 SQLite 恢复历史——代价是一次较慢的冷启动，但不会丢失对话记录。
+
+平台适配的模式和 Transport 层类似：`BasePlatformAdapter`（`gateway/platforms/base.py:1389`）定义抽象方法，每个平台实现自己的版本。如果某个平台的适配器崩溃（以 Telegram webhook 断开为例），只影响该平台——其他平台和 Agent 缓存不受影响。
+
+### 中断：当你改主意了
+
+在流程的任何一步，用户都可以中断。`agent.interrupt()`（`run_agent.py:1627`）被另一个线程调用时：
+
+```mermaid
+flowchart TD
+    User["用户按 Ctrl+C / 发送新消息"] --> Interrupt["agent.interrupt#40;#41;"]
+    Interrupt --> Flag["设置 _interrupt_requested = True"]
+    Interrupt --> Tools["传播到工具工作线程"]
+    Interrupt --> Children["递归传播到子 Agent"]
+    Children --> ChildInt["child.interrupt#40;#41;"]
+```
+
+**图：中断信号的多层级递归传播**
+
+还有一个更温和的机制——`steer()`（`run_agent.py:1728`）。它不中断当前操作，而是把文本缓存起来，等当前工具批次完成后注入到结果中。这适合"不要打断它，但让它下一步调整方向"的场景。
+
+### 关键设计模式
+
+| 模式 | 在哪里 | 解决什么问题 |
+|------|--------|------------|
+| Transport ABC | `agent/transports/base.py` | 20+ 个 Provider 的 API 差异 |
+| 自注册 Registry | `tools/registry.py` | 72 个工具的按需加载 |
+| Lazy Import | `delegate_tool.py`、`gateway/run.py` | 打破循环依赖 |
+| 系统提示缓存 | `_cached_system_prompt` | 最大化 prefix cache 命中率 |
+| 记忆双注入 | 系统提示（静态）+ 用户消息（动态） | 缓存友好与信息新鲜的平衡 |
+| Agent 缓存 | `gateway/run.py:64` | 128 个 session 复用 Agent 实例 |
+| 中断传播 | `agent.interrupt()` | 多层级递归中断子 Agent 和工具线程 |
 
 ### 设计决策
 
