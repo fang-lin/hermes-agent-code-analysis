@@ -82,9 +82,14 @@ display:
 | 问题 | 排查方向 |
 |------|---------|
 | `hermes` 启动很慢 | Android/Termux 上有三级快速启动优化（`main.py:10842`），如果没触发检查 Python 版本 |
-| 配置改了没生效 | `load_config()` 用 mtime 缓存，确认文件确实保存了；`load_config_readonly()` 不做 deepcopy 但不能修改返回值 |
-| 插件加载失败 | 检查 `plugins.enabled` 配置项白名单；`hermes plugins list` 查看发现了哪些插件 |
-| Provider 认证失败 | `hermes auth status` 查看各 Provider 认证状态；OAuth token 过期需要重新 `hermes login` |
+| 配置改了没生效 | `load_config()` 用 mtime 缓存，确认文件确实保存了（`stat()` 检查 mtime_ns + size）。如果文件已保存但仍无效，可能是 Gateway 进程的旧缓存——重启 Gateway 即可 |
+| config.yaml 语法错误 | `load_config()` 会静默回退到 `DEFAULT_CONFIG`（所有用户覆盖被丢弃），但会通过 `_warn_config_parse_failure()`（`config.py:37`）输出警告到 stderr 和 `agent.log`。检查 `hermes logs` 或 stderr 输出中的 YAML 解析错误 |
+| auth.json 损坏 | 所有读写通过 `_auth_store_lock()`（`auth.py:971`）文件锁序列化。如果锁文件残留（`auth.json.lock`），手动删除后重试。如果 JSON 本身损坏，删除 `~/.hermes/auth.json` 后重新 `hermes login` |
+| 插件加载失败 | 检查 `plugins.enabled` 配置项白名单；`hermes plugins list` 查看发现了哪些插件。单个插件加载失败不会阻止其他插件——错误被隔离 |
+| 插件钩子没触发 | 确认钩子名在 `VALID_HOOKS`（`plugins.py:128`，共 17 种）中；确认插件的 `plugin.yaml` 中 `provides_hooks` 声明了该钩子；检查 `hermes plugins list` 确认插件状态为 enabled |
+| Profile 切换后配置不对 | `_apply_profile_override()`（`main.py:183`）必须在 import 前执行。如果通过其他方式启动（以直接调用 Python 脚本为例），`HERMES_HOME` 可能未设置——检查 `get_hermes_home()` 返回的路径是否指向预期 Profile |
+| Provider 认证失败 | `hermes auth status` 查看各 Provider 认证状态；OAuth token 过期需要重新 `hermes login`；检查 `~/.hermes/.env` 中的 API Key 变量名是否与 `PROVIDER_REGISTRY` 中的 `api_key_env_vars` 匹配 |
+| migrate_config 后字段丢失 | `migrate_config()`（`config.py:3548`）做增量迁移，不会删除已有字段。如果字段丢失，可能是 YAML 语法错误导致整个文件被跳过（见上方"config.yaml 语法错误"） |
 
 > 📖 **延伸阅读（官方文档）：**
 > - [CLI 使用指南](https://hermes-agent.nousresearch.com/docs/user-guide/cli)
