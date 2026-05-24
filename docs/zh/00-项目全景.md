@@ -252,42 +252,50 @@ flowchart LR
 
 #### 第二站：Agent 核心循环
 
-`AIAgent.run_conversation()`（`run_agent.py:3525`）是整个系统的心脏。它的核心是一个 while 循环，默认最多迭代 90 次（`max_iterations`，`run_agent.py:360`）。还有第二道限制——`iteration_budget`——这是一个父子 Agent 共享的预算对象，防止子 Agent 失控消耗所有迭代次数。
+`AIAgent.run_conversation()`（`run_agent.py:4053`）是整个系统的心脏。它的核心是一个 while 循环，默认最多迭代 90 次（`max_iterations`，`run_agent.py:360`）。还有第二道限制——`iteration_budget`——这是一个父子 Agent 共享的预算对象，防止子 Agent 失控消耗所有迭代次数。
 
 在进入循环之前，`run_conversation()` 做三件准备工作：
 
-**系统提示词构建**（`_build_system_prompt()`，`run_agent.py:2206`）。这不是一段固定文本，而是一个多层三明治：
+**系统提示词构建**（`_build_system_prompt()`，`run_agent.py:2206`）。这不是一段固定文本，而是一个三层结构（`agent/system_prompt.py:12-19`）：
 
 ```mermaid
 flowchart TD
-    L1["1. Agent 身份 — SOUL.md 或默认身份"]
-    L2["2. 用户/网关系统消息"]
-    L3["3. 持久化记忆快照 — MEMORY.md + USER.md"]
-    L4["4. 技能系统提示"]
-    L5["5. 上下文文件 — AGENTS.md / .cursorrules"]
-    L6["6. 当前日期与时间（构建时冻结）"]
-    L7["7. 平台格式化提示"]
-    Extra["+ 帮助引导、工具行为引导等（按条件追加）"]
-    L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7 --> Extra
+    subgraph STABLE ["stable 层（最稳定，几乎不变）"]
+        S1["Agent 身份 — SOUL.md"]
+        S2["工具行为引导"]
+        S3["技能系统提示"]
+    end
+    subgraph CONTEXT ["context 层"]
+        C1["上下文文件 — AGENTS.md / .cursorrules"]
+        C2["调用者传入的 system_message"]
+    end
+    subgraph VOLATILE ["volatile 层（会话内固定，跨会话变化）"]
+        V1["MEMORY.md + USER.md 快照"]
+        V2["当前日期"]
+        V3["平台格式化提示"]
+    end
+    STABLE --> CONTEXT --> VOLATILE
 ```
 
-**图：系统提示词的七层三明治结构**
+**图：系统提示词的三层结构（stable / context / volatile）**
 
-关键设计：这个系统提示**在会话内只构建一次**，之后缓存在 `_cached_system_prompt`。为什么？因为 Anthropic 等 Provider 支持 prefix caching——如果每次请求的系统提示字节相同，服务端可以复用之前的 KV cache，大幅降低延迟和成本。动态信息（以记忆检索结果为例）注入到**用户消息**而非系统提示——这就是 Hermes 的"双注入"策略：
+关键设计：这个系统提示**在会话内只构建一次**，之后缓存在 `_cached_system_prompt`。为什么？因为 Anthropic 等 Provider 支持 prefix caching——如果每次请求的系统提示字节相同，服务端可以复用之前的 KV cache，大幅降低延迟和成本。
+
+这引出了一个精妙的问题：记忆信息怎么处理？MEMORY.md 快照放在系统提示的 volatile 层，会话内不变；但如果用户的当前消息需要从外部记忆 Provider（以向量数据库为例）检索相关片段，这些动态结果不能放进系统提示——那会破坏缓存。Hermes 的解决方案是"双注入"：
 
 ```mermaid
 graph LR
-    subgraph SP ["系统提示（稳定前缀）"]
-        M1["MEMORY.md 快照（静态）"]
-        M2["→ 不变，保证缓存命中"]
+    subgraph SP ["系统提示 volatile 层"]
+        M1["内置 MEMORY.md 快照"]
+        M2["→ 会话内不变，缓存友好"]
     end
-    subgraph UM ["用户消息（每次不同）"]
-        D1["MemoryManager 检索结果（动态）"]
+    subgraph UM ["用户消息"]
+        D1["外部 memory provider 检索结果"]
         D2["→ 每次不同，不影响缓存"]
     end
 ```
 
-**图：记忆双注入——静态快照入系统提示保证缓存，动态检索入用户消息保证时效**
+**图：记忆双注入——内置快照入系统提示保证缓存，外部检索入用户消息保证时效**
 
 **上下文压缩**。如果历史消息太长，在进入循环前就会做压缩——细节在前文"问题四"已经讲过。
 
