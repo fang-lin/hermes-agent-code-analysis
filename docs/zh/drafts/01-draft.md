@@ -1,8 +1,8 @@
-# 01-基础设施层：90 个文件撑起的控制平面
+# 01-基础设施层：97 个文件撑起的控制平面
 
 中文 | [English](../en/01-infrastructure.md)
 
-> **本章定位**：`hermes_cli/` 目录（90 个 .py 文件，100,759 行）——CLI 子命令、配置系统、认证系统、插件管理、Profile 隔离、网关服务管理。
+> **本章定位**：`hermes_cli/` 目录（97 个 .py 文件，约 101,700 行，含 proxy/ 子模块）——CLI 子命令、配置系统、认证系统、插件管理、Profile 隔离、网关服务管理。
 > **关键类**：`main()`（`main.py:10953`）、`DEFAULT_CONFIG`（`config.py:503`）、`PROVIDER_REGISTRY`（`auth.py:183`）、`PluginManager`（`plugins.py:883`）。
 
 > **本章基于 hermes-agent commit [`3bace071b`](https://github.com/NousResearch/hermes-agent/commit/3bace071b)（2026-05-24）**
@@ -13,7 +13,7 @@
 
 上一章追踪了一条消息的旅程——从用户输入到 Agent 回复。但在消息进入 Agent 核心之前，有一整套基础设施必须先就位：你的 API Key 从哪来？配置文件怎么加载？插件怎么发现？Profile 怎么隔离？网关进程谁来管？
 
-这些问题的答案都在 `hermes_cli/` 里。它是 hermes-agent 的**控制平面**——不直接参与对话，但决定了对话在什么环境下发生。它有 100,759 行代码，是整个项目最大的模块，比 Agent 核心（63,679 行）和网关层（80,025 行）都大。
+这些问题的答案都在 `hermes_cli/` 里。它是 hermes-agent 的**控制平面**——不直接参与对话，但决定了对话在什么环境下发生。它有约 101,700 行代码（含 proxy/ 子模块），是整个项目最大的模块，比 Agent 核心（63,679 行）和网关层（80,025 行）都大。
 
 ---
 
@@ -98,7 +98,7 @@ display:
 
 ### 从底层到入口：六层结构
 
-hermes_cli 的 90 个文件不是平铺的——它们有清晰的分层。理解这个分层，就理解了"一个 `hermes` 命令执行时，代码是怎么一层层往下调用的"。
+hermes_cli 的 97 个文件不是平铺的——它们有清晰的分层。理解这个分层，就理解了"一个 `hermes` 命令执行时，代码是怎么一层层往下调用的"。
 
 ```mermaid
 graph TD
@@ -136,11 +136,11 @@ Profile 切换有一个反直觉的设计：`main.py` 在任何模块 import 之
 
 配置和 Profile 就位之后，下一个问题才有意义：这个配置里声明的 Provider，凭什么相信你是你？
 
-#### Layer 1：认证——30 种 Provider 的身份管理
+#### Layer 1：认证——35 种 Provider 的身份管理
 
 **auth.py**（7,605 行）管理的就是这个问题：**用户的 API Key 或 OAuth token 从哪里来？**
 
-`PROVIDER_REGISTRY`（`auth.py:183`）是一个静态注册表，列出了约 30 种已知的 Provider，每个用 `ProviderConfig` 数据类（字段包括 `id`、`name`、`auth_type`、`inference_base_url`、`api_key_env_vars` 等，`auth.py:167`）描述其身份信息。认证方式分五种：
+`PROVIDER_REGISTRY`（`auth.py:183`）是一个静态注册表，列出了 35 种已知的 Provider，每个用 `ProviderConfig` 数据类（字段包括 `id`、`name`、`auth_type`、`inference_base_url`、`api_key_env_vars` 等，`auth.py:167`）描述其身份信息。认证方式分六种：
 
 | 认证方式 | 适用 Provider | 机制 |
 |---------|--------------|------|
@@ -254,17 +254,22 @@ hermes_cli/
 ├── callbacks.py         — Agent↔TUI 线程间回调桥接（242 行）
 ├── skin_engine.py       — 主题引擎（926 行）
 ├── skills_config.py     — 技能启用/禁用（177 行）
-├── doctor.py            — hermes doctor 诊断（行数较小）
+├── web_server.py        — Web Dashboard FastAPI 后端（4,671 行）
+├── goals.py             — Goals / Ralph Loop 跨轮次目标持续（762 行）
+├── doctor.py            — hermes doctor 环境诊断（2,012 行）
+├── backup.py            — hermes backup/import 数据迁移（937 行）
+├── checkpoints.py       — 文件系统快照管理（244 行）
+├── proxy/               — Subscription Proxy 本地代理（7 个 .py，947 行）
 ├── models.py            — 模型目录查询
 ├── claw.py              — OpenClaw 迁移
-└── ...（另 ~70 个功能文件）
+└── ...（另 ~60 个功能文件）
 ```
 
 ### 设计决策
 
 #### 决策一：13,847 行的入口文件
 
-`main.py` 是整个项目第二大的单文件（仅次于 `cli.py`）。它包含了所有子命令的分发逻辑和约 30 个 Provider 配置流程。为什么不拆分？
+`main.py` 是整个项目第二大的单文件（仅次于 `cli.py`）。它包含了所有子命令的分发逻辑和约 19 个 Provider 配置流程。为什么不拆分？
 
 Provider 配置流程虽然多，但它们之间高度相似（都是"选模型 → 验证凭证 → 写配置"的变体），放在一个文件里可以用 grep 一次性搜索。如果拆成 30 个文件，改一个共性逻辑需要改 30 处。这是"上帝文件"策略在 hermes-agent 中的又一个体现。
 
