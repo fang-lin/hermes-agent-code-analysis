@@ -63,7 +63,7 @@ agent.close()
 
 | 问题 | 排查方向 |
 |------|---------|
-| Agent 循环不停止 | 检查 `max_turns` 设置；子 Agent 共享父的 `iteration_budget` |
+| Agent 循环不停止 | 检查 `max_turns` 设置；子 Agent 有独立的 `iteration_budget`（默认 50），通过 `delegation.max_iterations` 调整 |
 | 频繁 429 限流 | 配置 Credential Pool 多 Key 轮转；或设置 fallback_model |
 | 上下文溢出错误 | 上下文压缩器应自动处理；检查 `compression` 配置项 |
 | 流式响应卡住 | 180 秒无新 token 会自动重试（`HERMES_STREAM_STALE_TIMEOUT` 可调） |
@@ -201,7 +201,7 @@ flowchart TD
 - **纯文本**（`finish_reason == "stop"`）→ 退出循环
 - **异常** → 交给 `error_classifier` 分类 → 决定重试/压缩/轮转/Fallback（详见下文"重试与退避"一节）
 
-循环受两道限制约束：`max_iterations`（默认 90，单次会话上限）和 `iteration_budget`（父子 Agent 共享的预算池，`conversation_loop.py:362`）。两者取更严的那个生效。当预算耗尽时，`_budget_grace_call` 允许最后一次调用让模型生成总结性回复，而不是在工具调用中途突然断掉。
+循环受 `IterationBudget` 约束（`conversation_loop.py:362`）——每个 Agent 实例有独立的预算，父 Agent 默认 90 次（`max_iterations`），子 Agent 默认 50 次（`delegation.max_iterations`）。父子预算相互独立——三个子 Agent 各可用 50 次迭代，总计可以超过父的 90 次上限。当预算耗尽时，`_budget_grace_call` 允许最后一次调用让模型生成总结性回复，而不是在工具调用中途突然断掉。
 
 **循环之后**：
 
@@ -408,8 +408,8 @@ flowchart TD
 但 Hermes 面临一个额外挑战：模型响应分两种——**纯文本回复**和**工具调用**。只有前者应该流式展示给用户，后者是给 Agent 自己看的内部调度指令。
 
 `_fire_stream_delta()`（`run_agent.py:3060`）是流式分发的核心。每个文本 token 到达时，它先经过两个 scrubber 过滤：`_stream_think_scrubber` 去掉推理/思考块（以 `<think>` 标签为例，不应泄露到用户界面）、`_stream_context_scrubber` 去掉内部记忆上下文标记。过滤后分发给两个回调：
-- `stream_callback`（CLI 用它驱动终端输出）
-- `stream_delta_callback`（TTS 语音合成管线用它在生成文本的同时开始朗读）
+- `stream_delta_callback`（CLI 用它驱动终端输出，`cli.py:4857`）
+- `stream_callback`（TTS 语音合成管线用它在生成文本的同时开始朗读，`conversation_loop.py:250`）
 
 **工具调用轮次完全静默**——用户不会看到"我要搜索一下网页"这样的中间文字逐字蹦出来。Hermes 用工具进度回调（`tool_progress_callback`）和 `KawaiiSpinner` 动画替代，保持输出区干净。
 
@@ -441,11 +441,11 @@ flowchart TD
 
 **图：父 Agent 并行分拆三个子 Agent，汇总后继续执行**
 
-子 Agent 运行在 `ThreadPoolExecutor` 中，默认最多 3 个并发（`_DEFAULT_MAX_CONCURRENT_CHILDREN = 3`，`delegate_tool.py:132`），共享父的 `iteration_budget`——如果父预算 90 次迭代，三个子 Agent 加起来也只能用这 90 次中剩下的部分。
+子 Agent 运行在 `ThreadPoolExecutor` 中，默认最多 3 个并发（`_DEFAULT_MAX_CONCURRENT_CHILDREN = 3`，`delegate_tool.py:132`）。每个子 Agent 获得独立的 `IterationBudget`，默认上限 50 次（`delegation.max_iterations`），不从父的预算中扣减。这意味着父 + 三个子 Agent 理论上可以执行 90 + 3×50 = 240 次迭代——用户通过 `delegation.max_iterations` 配置控制每个子 Agent 的上限。
 
 #### 安全隔离
 
-子 Agent 不是父的完整克隆。它的工具集是父的**子集**（取交集，`delegate_tool.py:891-930`），且五个工具被强制禁用（`DELEGATE_BLOCKED_TOOLS`，`delegate_tool.py:45`）：
+子 Agent 不是父的完整克隆。它的工具集是父的**子集**（取交集，`delegate_tool.py:926-961`），且五个工具被强制禁用（`DELEGATE_BLOCKED_TOOLS`，`delegate_tool.py:45`）：
 
 | 禁用的工具 | 原因 |
 |-----------|------|
@@ -459,9 +459,9 @@ flowchart TD
 
 #### 审批和错误处理
 
-子 Agent 运行在独立线程中，缺少 CLI 的交互上下文。如果子 Agent 要执行危险命令（以 `rm -rf` 为例），父 Agent 的审批回调对它不可见。默认行为是 `_subagent_auto_deny`（`delegate_tool.py:69`）——自动拒绝所有需要审批的操作。对于 cron 任务或批量运行场景，可以配置 `delegation.subagent_auto_approve` 放开限制。
+子 Agent 运行在独立线程中，缺少 CLI 的交互上下文。如果子 Agent 要执行危险命令（以 `rm -rf` 为例），父 Agent 的审批回调对它不可见。默认行为是 `_subagent_auto_deny`（`delegate_tool.py:73`）——自动拒绝所有需要审批的操作。对于 cron 任务或批量运行场景，可以配置 `delegation.subagent_auto_approve` 放开限制。
 
-如果子 Agent 崩溃（异常退出），`ThreadPoolExecutor` 会捕获异常，父 Agent 收到一个包含错误信息的结果——不会导致父 Agent 崩溃。`_active_subagents` 注册表（`delegate_tool.py:151`）让 TUI 界面可以实时显示当前有多少子 Agent 在运行、各自在做什么，并支持单独中断某个子 Agent。
+如果子 Agent 崩溃（异常退出），`ThreadPoolExecutor` 会捕获异常，父 Agent 收到一个包含错误信息的结果——不会导致父 Agent 崩溃。`_active_subagents` 注册表（`delegate_tool.py:155`）让 TUI 界面可以实时显示当前有多少子 Agent 在运行、各自在做什么，并支持单独中断某个子 Agent。
 
 无论是单 Agent 还是多层子 Agent，每次对话运行结束时，系统都可以把完整的执行轨迹保存下来——这就是 Trajectory 机制存在的原因。
 
