@@ -97,6 +97,69 @@ flowchart TD
 
 v0.14.0 相比 v0.11.0 有一个重大架构变化：`run_agent.py` 从 13,293 行缩减到 4,309 行。核心循环被拆到了 `agent/conversation_loop.py`（4,231 行），系统提示构建拆到了 `agent/system_prompt.py`（380 行）和 `agent/prompt_builder.py`（1,465 行），Agent 初始化拆到了 `agent/agent_init.py`（1,637 行）。`run_agent.py` 里剩下的大多是 forwarder 函数——它们委托给 `agent/` 下的模块，保持了向后兼容的 API 表面。
 
+### 一次完整对话的生命周期
+
+当调用者（CLI、Gateway 或父 Agent）调用 `run_conversation()`（`conversation_loop.py:232`）时，一次对话按以下顺序展开：
+
+```mermaid
+flowchart TD
+    subgraph BEFORE ["循环之前"]
+        R["恢复主力 Provider<br/>#40;如果上轮 Fallback 了#41;"]
+        S["构建/复用系统提示<br/>#40;会话内只构建一次#41;"]
+        C["预飞压缩检查<br/>#40;历史消息超阈值？#41;"]
+        M["记忆预取<br/>#40;外部 memory provider#41;"]
+        P["插件 pre_llm_call 钩子"]
+    end
+
+    subgraph LOOP ["核心循环（最多 max_iterations 次）"]
+        CHK["检查中断标志"]
+        API["构建 API 参数 → Transport 转换<br/>→ 流式调用模型"]
+        PARSE{{"响应类型？"}}
+        TOOL["执行工具<br/>#40;串行或并行#41;"]
+        TEXT["最终文本回复"]
+        CHK --> API --> PARSE
+        PARSE -->|工具调用| TOOL
+        TOOL -->|结果放回消息| CHK
+        PARSE -->|纯文本| TEXT
+    end
+
+    subgraph AFTER ["循环之后"]
+        SAVE["保存会话到 SessionDB"]
+        TRAJ["写 Trajectory #40;如开启#41;"]
+        MEM["记忆审查 #40;定期触发#41;"]
+        SKILL["技能自改进 #40;定期触发#41;"]
+    end
+
+    BEFORE --> LOOP --> AFTER
+```
+
+**图：`run_conversation()` 的完整生命周期——循环前准备、核心循环、循环后收尾**
+
+**循环之前**做五件事：
+
+1. **恢复主力 Provider**（`conversation_loop.py:297`）——如果上一轮触发了 Fallback，这一轮先尝试恢复主力模型
+2. **构建/复用系统提示**——会话内只构建一次，后续复用缓存（保证 Prompt Caching 命中）。Gateway 续接会话时从 SessionDB 加载旧提示，避免重建导致缓存失效
+3. **预飞压缩**（`conversation_loop.py:474`）——进入循环前就检查历史消息是否超过上下文阈值，超过则最多做 3 轮压缩。这防止了"带着超长历史调 API，直到 Provider 报错才压缩"的问题
+4. **记忆预取**——从外部 memory provider（以向量数据库为例）检索和当前消息相关的记忆片段，结果缓存到整个 turn 内复用（10 次工具调用不会查 10 次）
+5. **插件 pre_llm_call 钩子**——插件可以在这里注入额外上下文到用户消息中（不是系统提示——那会破坏缓存）
+
+**核心循环**的每一轮：
+
+1. 检查中断标志——如果用户按了 Ctrl+C 或发了新消息，立即 break
+2. 构建 API 参数 → Transport 转换 → 流式调用模型
+3. 解析响应：如果是工具调用 → 执行工具（串行或并行）→ 把结果放回消息 → 下一轮。如果是纯文本 → 退出循环
+
+循环受两道限制约束：`max_iterations`（默认 90，单次会话上限）和 `iteration_budget`（父子 Agent 共享的预算池，`conversation_loop.py:362`）。两者取更严的那个生效。
+
+**循环之后**做四件事：
+
+1. 保存会话到 SQLite（`hermes_state.py`）
+2. 写 Trajectory（如果 `save_trajectories=True`）
+3. 记忆审查——根据 `memory.nudge_interval` 配置，每 N 轮触发一次自动记忆整理
+4. 技能自改进——根据工具调用次数，定期触发技能创建/优化
+
+这就是一次完整对话从头到尾发生的事情。后面的各节会聚焦这条主线上的关键机制——它们各自嵌在哪个阶段、解决什么问题。
+
 ### Prompt Caching：让重复的 token 不再重复付费
 
 每次调用模型 API，完整的消息序列（系统提示 + 历史对话 + 当前消息）都要从头发送。一个 Hermes 会话中，系统提示可能占 5,000-10,000 token，但它在 20 轮对话中几乎不变——等于同样的内容付了 20 次钱。
