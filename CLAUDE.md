@@ -66,10 +66,13 @@
 1. 主线 (opus) 读源码写草稿（读 v1 对应章节作为深度基准）
 2. 文学性审核 Agent (sonnet) — 读取 prompts/literary-review.md 作为指令
 3. 主线 (opus) 采纳文学性建议，写入正式文档
-4. 事实审核 Agent (sonnet) — 读取 prompts/factual-review.md，审核正式文档（最终版本）
-5. 主线 (opus) 对事实审核的 ⚠️/❌ 项做二次独立验证，修正确认的错误
+4. 并行启动（两个 Agent 互不可见）：
+   ├── 事实审核 Agent (sonnet) — 读取 prompts/factual-review.md
+   └── 深度审核 Agent (sonnet) — 读取 prompts/depth-review.md
+   注意：启动时只传模板路径 + 文档路径 + 源码路径，不要内联具体验证项
+5. 主线 (opus) 对事实 ⚠️/❌ + 深度 🟡/🔴 做二次验证，修正错误 + 补充深度
 6. 更新 docs/zh/98-审核报告汇总.md
-7. 更新工作日志（简要记录：时间、产出、审核发现的重大问题、与 v1 的关键差异）
+7. 更新工作日志
 ```
 
 ## 审核 Agent 规则

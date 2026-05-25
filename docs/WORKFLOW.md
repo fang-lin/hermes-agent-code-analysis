@@ -74,17 +74,24 @@
 2. 同时整合已知的事实修正（如有）
 3. 写入正式文件：`docs/zh/XX-章节标题.md`
 
-### 步骤 5：事实审核（sonnet）
+### 步骤 5：事实审核 + 深度审核（sonnet，并行）
 
-1. 读取 `prompts/factual-review.md`，启动事实审核 Agent，**审核正式文档（最终版本）**
-2. **立即将审核报告保存到文件**：`docs/zh/reviews/XX-factual-review.md`
+1. **并行启动两个 Agent**：
+   - 事实审核 Agent：读取 `prompts/factual-review.md` 作为指令
+   - 深度审核 Agent：读取 `prompts/depth-review.md` 作为指令
+2. **审核对象是正式文档（最终版本）**
+3. **启动审核 Agent 时，只传入 prompt 模板文件路径 + 待审核文档路径 + 源码目录路径。不要在内联指令中列出具体要验证的项目**——让 Agent 按照模板自主发现问题，而非被引导只检查你列的项
+4. **立即将审核报告保存到文件**：
+   - `docs/zh/reviews/XX-factual-review.md`
+   - `docs/zh/reviews/XX-depth-review.md`
 
 ### 步骤 6：二次验证 + 修正（主线 opus）
 
 1. 读取事实审核报告中所有 ⚠️ 和 ❌ 项
-2. 对每一项，自己独立读源码验证
-3. 如果 opus 验证结果和审核 Agent 不一致，以 opus 实际读码结果为准
-4. 修正正式文档中确认的错误
+2. 读取深度审核报告中所有 🟡 和 🔴 项
+3. 对每一项，自己独立读源码验证
+4. 如果 opus 验证结果和审核 Agent 不一致，以 opus 实际读码结果为准
+5. 修正事实错误，**补充深度缺失**
 
 ### 步骤 7：更新元数据（主线 opus）
 
