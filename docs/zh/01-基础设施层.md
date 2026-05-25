@@ -71,7 +71,7 @@ display:
 
 ### 常见场景
 
-**场景一：从零配置到第一次对话。** `hermes setup` 启动配置向导（`setup.py:3176`），分五个步骤：选 Provider 和模型 → 选终端后端 → 设 Agent 参数 → 配消息平台 → 配工具集。每个步骤可独立运行（以 `hermes setup model` 为例）。
+**场景一：从零配置到第一次对话。** `hermes setup` 启动配置向导（`setup.py:3176`），分六个步骤：选 Provider 和模型 → 配 TTS → 选终端后端 → 配消息平台 → 配工具集 → 设 Agent 参数。每个步骤可独立运行（以 `hermes setup model` 为例）。
 
 **场景二：多 Profile 隔离。** 你可能需要为不同项目使用不同的配置——一个用 Claude 做代码审查，一个用 DeepSeek 做数据分析。`hermes profile create coder --clone` 会完整复制当前配置到新 Profile（`profiles.py:636`），之后用 `hermes -p coder` 切换，或者直接用自动生成的 wrapper 脚本 `coder` 作为快捷命令。
 
@@ -137,9 +137,9 @@ flowchart LR
 
 ### 它怎么知道我是谁？—— 认证系统
 
-**auth.py**（7,605 行）管理的就是身份问题。hermes-agent 支持 35 种 Provider，每种的认证方式都不一样——有的用 API Key，有的用 OAuth，有的用 AWS IAM。如果为每种 Provider 写一套独立的认证逻辑，代码会爆炸。
+**auth.py**（7,605 行）管理的就是身份问题。hermes-agent 支持 30+ 种 Provider，每种的认证方式都不一样——有的用 API Key，有的用 OAuth，有的用 AWS IAM。如果为每种 Provider 写一套独立的认证逻辑，代码会爆炸。
 
-`PROVIDER_REGISTRY`（`auth.py:183`）是一个统一的注册表，用 `ProviderConfig` 数据类（`auth.py:167`，字段包括 `id`、`name`、`auth_type`、`inference_base_url`、`api_key_env_vars` 等）描述每个 Provider 的身份信息。35 种 Provider 归纳为六种认证方式：
+`PROVIDER_REGISTRY`（`auth.py:183`）是一个统一的注册表，用 `ProviderConfig` 数据类（`auth.py:167`，字段包括 `id`、`name`、`auth_type`、`inference_base_url`、`api_key_env_vars` 等）描述每个 Provider 的身份信息。30+ 种 Provider 归纳为六种认证方式：
 
 | 认证方式 | 适用 Provider | 机制 |
 |---------|--------------|------|
@@ -192,7 +192,7 @@ flowchart TD
 1. **Azure 显式指定**（`runtime_provider.py:1224`）——如果 `provider=anthropic` 且 `base_url` 包含 `azure.com`，直接走 Azure Anthropic 短路路径，返回 `anthropic_messages` 模式
 2. **Azure Foundry**（`runtime_provider.py:1244`）——用户配置了 `provider: azure-foundry` 时，走 Azure 专用解析（支持 Entra ID 无密钥认证）
 3. **自定义 Provider**（`runtime_provider.py:1254`）——`config.yaml` 的 `providers:` 节中用户定义的非标准端点（以私有 vLLM 服务为例），直接使用用户配置的 base_url 和 api_key
-4. **标准注册表**（`runtime_provider.py:1263`）——走 `auth.py` 的 `PROVIDER_REGISTRY` 解析，匹配 35 种已知 Provider
+4. **标准注册表**（`runtime_provider.py:1263`）——走 `auth.py` 的 `PROVIDER_REGISTRY` 解析，匹配已知 Provider
 5. **Credential Pool**（可选）——如果配置了多 Key 轮转，从池中选一个当前可用的凭证（详见第 02 章的 Credential Pool 一节）
 6. **Provider 类型解析器**——根据匹配到的 Provider 类型，调用对应的凭证解析函数（以 Nous OAuth 为例，走 JWT invoke 路径；以 API Key Provider 为例，从 `.env` 或 `auth.json` 读取）
 
