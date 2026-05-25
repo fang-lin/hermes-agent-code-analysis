@@ -185,7 +185,16 @@ flowchart TD
     G -->|否| I --> J
 ```
 
-**图：runtime_provider 的凭证解析优先级链——Credential Pool 是可选的多 Key 轮转机制（详见第 02 章）**
+**图：runtime_provider 的凭证解析优先级链**
+
+解析按以下优先级依次尝试，命中则停止：
+
+1. **Azure 显式指定**（`runtime_provider.py:1224`）——如果 `provider=anthropic` 且 `base_url` 包含 `azure.com`，直接走 Azure Anthropic 短路路径，返回 `anthropic_messages` 模式
+2. **Azure Foundry**（`runtime_provider.py:1244`）——用户配置了 `provider: azure-foundry` 时，走 Azure 专用解析（支持 Entra ID 无密钥认证）
+3. **自定义 Provider**（`runtime_provider.py:1254`）——`config.yaml` 的 `providers:` 节中用户定义的非标准端点（以私有 vLLM 服务为例），直接使用用户配置的 base_url 和 api_key
+4. **标准注册表**（`runtime_provider.py:1263`）——走 `auth.py` 的 `PROVIDER_REGISTRY` 解析，匹配 35 种已知 Provider
+5. **Credential Pool**（可选）——如果配置了多 Key 轮转，从池中选一个当前可用的凭证（详见第 02 章的 Credential Pool 一节）
+6. **Provider 类型解析器**——根据匹配到的 Provider 类型，调用对应的凭证解析函数（以 Nous OAuth 为例，走 JWT invoke 路径；以 API Key Provider 为例，从 `.env` 或 `auth.json` 读取）
 
 为什么不直接读配置文件拿 API Key？因为现实比这复杂得多：OAuth token 需要刷新、Credential Pool 需要轮转限流的 Key、Azure 需要特殊处理 Entra ID 认证、自定义 Provider 的 base_url 可能来自环境变量。这个函数把所有复杂性集中在一处，Agent 核心只需要拿到一个干净的三元组。
 
