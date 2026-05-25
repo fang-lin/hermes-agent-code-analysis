@@ -231,19 +231,35 @@ flowchart TD
     SYS --> TOOLS_S --> MSGS
 ```
 
-stable 层包含：SOUL.md 人格、工具行为引导、技能提示、环境提示、平台提示、Profile 隔离声明。context 层包含：AGENTS.md / .cursorrules、调用者 system_message。volatile 层包含：MEMORY.md 快照、USER.md 快照、日期、模型名。messages 中当前轮的 user 消息会被注入外部 memory 检索结果和插件 pre_llm_call 上下文。
+**图：一次 API 调用中 LLM 收到的完整结构**
 
-**图：一次 API 调用中 LLM 收到的完整结构——① 系统提示（三层）+ ② 工具 schema + ③ 消息历史**
+#### ① system message——告诉 LLM "你是谁、在哪里、能做什么"
 
-几个关键设计决策隐藏在这个结构里：
+LLM 本身不知道自己运行在什么环境里——它不知道用户在 Telegram 上还是终端里，不知道有哪些工具可用，不知道用户的偏好。系统提示的作用是**给 LLM 提供做决策所需的全部上下文**。
 
-**为什么系统提示这么复杂？** 因为 LLM 本身不知道自己运行在什么环境里——它不知道用户在 Telegram 上还是终端里，不知道有哪些工具可用，不知道用户的偏好。系统提示的作用是**给 LLM 提供做决策所需的全部上下文**。没有环境提示，LLM 可能给出 Windows 命令而实际在 Linux 上运行；没有工具引导，LLM 可能描述要做什么而不是真的调用工具。
+系统提示由三层拼接而成（`agent/system_prompt.py:60`），按缓存友好性从高到低排列：
 
-**为什么记忆分两路注入？** MEMORY.md 快照在系统提示的 volatile 层（会话内不变），外部 memory provider 的检索结果注入到用户消息中（每轮不同）。这样设计是因为系统提示只构建一次且被缓存——如果每轮都往系统提示里塞新的检索结果，缓存就失效了。用户消息本来每轮就不同，在里面加东西不影响缓存。
+- **stable 层**（几乎不变）：SOUL.md 人格定义（"你是 Hermes，一个 AI 助手..."）、工具行为引导（"当你需要搜索时调用 web_search，不要自行编造答案"）、技能系统提示（已安装技能的简介和触发条件）、环境提示（"你在 WSL2 上运行" / "你在 Docker 容器里"——没有这个，LLM 可能给出 Windows 命令而实际在 Linux 上）、平台提示（"用户在 Telegram 上，回复用 Markdown"）、Profile 隔离声明（"不要修改其他 Profile 的文件"）
+- **context 层**（跨会话可能变化）：用户项目的 AGENTS.md / .cursorrules（项目级指令）、调用者传入的 system_message
+- **volatile 层**（每个会话不同，但会话内不变）：MEMORY.md 快照（"用户是后端开发者，偏好 Python..."）、USER.md 快照（"习惯用 vim，不喜欢 TypeScript"）、当前日期（只精确到日，不含分钟——这样同一天内系统提示字节不变，保证缓存命中）、模型名和 Provider 名
 
-**为什么工具调用历史也在消息里？** LLM 需要看到之前的工具调用和结果，才能理解对话的上下文。如果它上一轮搜索了网页，这一轮被要求"整理成表格"，它需要看到搜索结果才知道整理什么。这就是为什么 `tool_call` 和 `tool` 类型的消息都保留在历史中。
+三层的排列顺序不是随意的——stable 层放最前面，因为 Prompt Caching 的前缀匹配从第一个字节开始。如果把 volatile 层（每个会话都不同的记忆快照）放在 stable 层前面，所有会话的缓存前缀都不同，缓存就废了。
 
-**工具 schema 有多大？** 72 个工具的 JSON schema 可能占 20,000-30,000+ token。这也是为什么 Prompt Caching 很重要——工具 schema 每次都一样，不缓存就每轮都付费。
+#### ② tools——告诉 LLM "你有哪些工具可以用"
+
+72 个工具的 function-calling JSON schema，以 OpenAI 格式定义（每个工具包含 name、description、parameters）。这部分可能占 **20,000-30,000+ token**——是单次 API 调用中 token 开销最大的部分之一。
+
+工具 schema 每轮都完全相同（工具集在会话内不变），所以 Prompt Caching 对它的节省效果最显著——不缓存的话，每轮对话都要为同样的 20K+ token 付费。
+
+#### ③ messages——对话历史 + 当前消息
+
+消息列表包含完整的对话历史：用户消息、assistant 回复、工具调用（`tool_calls`）和工具结果（`tool` 角色消息）。LLM 需要看到之前的工具调用和结果才能理解上下文——如果它上一轮搜索了网页，这一轮被要求"整理成表格"，它需要看到搜索结果才知道整理什么。
+
+当前轮的 user 消息会被**注入两种额外内容**（`conversation_loop.py:797-808`，仅在 API 调用时注入，不修改原始消息列表，不持久化到 SessionDB）：
+- 外部 memory provider 的检索结果（步骤 ❹ 预取的 `_ext_prefetch_cache`）
+- 插件 pre_llm_call 钩子返回的上下文
+
+为什么这些注入到用户消息而不是系统提示？因为系统提示被缓存——修改它会破坏缓存。用户消息本来每轮就不同，在里面加东西不影响缓存前缀。
 
 理解了 LLM 看到什么之后，后面的各节就有了明确的上下文——它们各自影响上面这个消息结构的哪个部分。
 
