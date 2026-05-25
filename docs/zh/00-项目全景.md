@@ -280,7 +280,7 @@ flowchart TD
     STABLE --> CONTEXT --> VOLATILE
 ```
 
-**图：系统提示词的三层结构（stable / context / volatile）**
+**图：系统提示词的三层结构（stable / context / volatile）——图中仅列出核心组成，完整内容见 `agent/system_prompt.py:60`**
 
 关键设计：这个系统提示**在会话内只构建一次**，之后缓存在 `_cached_system_prompt`。为什么？因为 Anthropic 等 Provider 支持 prefix caching——如果每次请求的系统提示字节相同，服务端可以复用之前的 KV cache，大幅降低延迟和成本。
 
@@ -347,12 +347,11 @@ graph TD
 
 ```mermaid
 %%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 15, "rankSpacing": 25}}}%%
-flowchart TD
-    User["用户按 Ctrl+C / 发送新消息"] --> Interrupt["agent.interrupt#40;#41;"]
-    Interrupt --> Flag["设置 _interrupt_requested = True"]
-    Interrupt --> Tools["传播到工具工作线程"]
-    Interrupt --> Children["递归传播到子 Agent"]
-    Children --> ChildInt["child.interrupt#40;#41;"]
+flowchart LR
+    User["用户 Ctrl+C"] --> Interrupt["interrupt#40;#41;"]
+    Interrupt --> Flag["设置标志"]
+    Flag --> Tools["传播到工具线程"]
+    Tools --> Children["递归传播到子 Agent"]
 ```
 
 **图：中断信号的多层级递归传播**

@@ -216,7 +216,7 @@ flowchart TD
 flowchart TD
     subgraph SYS ["① system message"]
         direction LR
-        STABLE["stable: SOUL.md · 工具引导 · 技能 · 环境 · 平台"] --> CONTEXT["context: AGENTS.md · system_message"] --> VOLATILE["volatile: MEMORY.md · USER.md · 日期"]
+        STABLE["stable: SOUL.md · 工具引导 · 技能 · 环境 · 平台 · 等"] --> CONTEXT["context: AGENTS.md · system_message"] --> VOLATILE["volatile: MEMORY.md · USER.md · 日期"]
     end
 
     subgraph TOOLS_S ["② tools: 72 个工具 schema · ~20K–30K+ token"]
@@ -334,12 +334,11 @@ stateDiagram-v2
     [*] --> ok
     ok --> exhausted : 429/402 限流
     exhausted --> ok : 冷却到期（默认 1 小时）
-    ok --> refreshing : OAuth token 接近过期
-    refreshing --> ok : 刷新成功
-    refreshing --> exhausted : 刷新失败
 ```
 
-**图：单个凭证的三种状态转换**
+**图：单个凭证的两种持久状态转换**
+
+只有两个持久状态：`STATUS_OK`（`credential_pool.py:52`）和 `STATUS_EXHAUSTED`（`credential_pool.py:53`）。OAuth token 刷新不是一个独立状态——它在选取凭证时通过 `_refresh_entry()` 自动触发，刷新期间凭证仍在 `ok` 态。刷新成功则更新 token 保持 `ok`；刷新失败则跳过该凭证（不选取），但不会将其标记为 `exhausted`。
 
 一个常见的误解是 Credential Pool 由 Agent 管理。实际上，**池的创建由 CLI/Gateway 层完成**（`hermes_cli/auth.py`），在 Agent 创建之前就准备好，通过 `credential_pool=pool` 参数注入。Agent 只是消费者——它从池中选凭证、标记限流状态、触发 token 刷新，但不负责凭证从哪里来。
 
