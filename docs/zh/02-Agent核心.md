@@ -180,7 +180,12 @@ flowchart TD
 
 **❻ 检查中断标志**——如果用户按了 Ctrl+C 或发了新消息，`_interrupt_requested` 为 True，立即 break。中断信号会递归传播到所有子 Agent 和工具工作线程。
 
-**❼ 组装 API 消息**（`conversation_loop.py:788-831`）——把内部的 `messages` 列表转换为 `api_messages` 副本（不修改原始列表）。在这一步：将步骤 ❹ 的记忆检索结果和步骤 ❺ 的插件上下文注入到当前用户消息末尾；拷贝推理内容（`reasoning_content`）供多轮推理上下文延续；清理内部标记字段（`finish_reason`、`_thinking_prefill` 等）；标准化工具调用参数的 JSON（`sort_keys=True`，`separators=(",", ":")`）防止序列化差异导致缓存 miss。
+❼❽❾ 这三步合在一起完成同一件事：**把 Agent 内部的 `messages` 列表变成 Provider 可以接受的 API 请求**——过程中涉及注入、清理、格式转换三类操作。
+
+**❼ 组装 API 消息**（`conversation_loop.py:788-831`）——从 `messages` 生成一份 `api_messages` 副本（不修改原始列表），分三类操作处理：
+- **注入**：把步骤 ❹ 的记忆检索结果和步骤 ❺ 的插件上下文追加到当前用户消息末尾；拷贝推理内容（`reasoning_content`）供多轮推理延续
+- **清理**：去除内部标记字段（`finish_reason`、`_thinking_prefill` 等），这些是 Agent 内部状态，不应发给 API
+- **标准化**：工具调用参数做 `sort_keys=True`、`separators=(",", ":")` 序列化，保证相同内容的字节表示一致，防止 Prompt Caching 因序列化差异 miss
 
 **❽ 拼接系统提示 + 缓存标记**——把 `_cached_system_prompt` 作为 `{"role": "system", "content": ...}` 放在 `api_messages` 最前面。如果启用了 Prompt Caching（`_use_prompt_caching`），调用 `apply_anthropic_cache_control()` 注入 `cache_control` breakpoint（详见下文"Prompt Caching"一节）。
 
@@ -193,7 +198,7 @@ flowchart TD
 - **纯文本**（`finish_reason == "stop"`）→ 退出循环
 - **异常** → 交给 `error_classifier` 分类 → 决定重试/压缩/轮转/Fallback（详见下文"重试与退避"一节）
 
-循环受 `IterationBudget` 约束（`conversation_loop.py:362`）——每个 Agent 实例有独立的预算，父 Agent 默认 90 次（`max_iterations`），子 Agent 默认 50 次（`delegation.max_iterations`）。父子预算相互独立——三个子 Agent 各可用 50 次迭代，总计可以超过父的 90 次上限。当预算耗尽时，`_budget_grace_call` 允许最后一次调用让模型生成总结性回复，而不是在工具调用中途突然断掉。
+循环受 `IterationBudget` 约束（`conversation_loop.py:362`）——这是一个绑定在 Agent 实例上的计数器，每执行一次 LLM 调用就递减一次。每个 Agent 实例有独立的预算，父 Agent 默认 90 次（`max_iterations`），子 Agent 默认 50 次（`delegation.max_iterations`）。父子预算相互独立——三个子 Agent 各可用 50 次迭代，总计可以超过父的 90 次上限。当预算耗尽时，`_budget_grace_call` 允许最后一次调用让模型生成总结性回复，而不是在工具调用中途突然断掉。
 
 **循环之后**：
 
@@ -249,7 +254,7 @@ LLM 本身不知道自己运行在什么环境里——它不知道用户在 Tel
 
 72 个工具的 function-calling JSON schema，以 OpenAI 格式定义（每个工具包含 name、description、parameters）。这部分可能占 **20,000-30,000+ token**——是单次 API 调用中 token 开销最大的部分之一。
 
-工具 schema 每轮都完全相同（工具集在会话内不变），所以 Prompt Caching 对它的节省效果最显著——不缓存的话，每轮对话都要为同样的 20K+ token 付费。
+工具 schema 每轮都完全相同——这个特性后文的 Prompt Caching 节会充分利用到。
 
 #### ❸ messages——对话历史 + 当前消息
 
@@ -261,7 +266,7 @@ LLM 本身不知道自己运行在什么环境里——它不知道用户在 Tel
 
 为什么这些注入到用户消息而不是系统提示？因为系统提示被缓存——修改它会破坏缓存。用户消息本来每轮就不同，在里面加东西不影响缓存前缀。
 
-理解了 LLM 看到什么之后，后面的各节就有了明确的上下文——它们各自影响上面这个消息结构的哪个部分。
+理解了 LLM 每次看到的完整输入之后，Prompt Caching 节就有了立足点——它解决的正是这三部分中重复内容的开销问题。
 
 ### Prompt Caching：让重复的 token 不再重复付费
 
@@ -277,7 +282,7 @@ flowchart LR
 
 **图：Prompt Caching 的 breakpoint 分配——系统提示占一个，最近三条各占一个**
 
-系统提示是最稳定的前缀——会话内不变，命中率接近 100%。Hermes 在多个层面守护前缀稳定性：系统提示只构建一次（`_cached_system_prompt`）、JSON 工具参数做 `sort_keys=True` 标准化（防序列化顺序差异导致 cache miss）、消息内容 `.strip()` 消除空白差异。
+系统提示是最稳定的前缀——会话内不变，命中率接近 100%。Provider 的缓存以前缀内容的哈希为键——就像 git 以文件内容哈希标识版本，一个字节不同就是不同的 key，哪怕肉眼看起来一样。这就是为什么 Hermes 要在多个层面守护前缀稳定性：系统提示只构建一次（`_cached_system_prompt`）、JSON 工具参数做 `sort_keys=True` 标准化（防序列化顺序差异导致 cache miss）、消息内容 `.strip()` 消除空白差异。
 
 缓存 TTL 可通过 `prompt_caching.cache_ttl` 配置：5 分钟（默认，写入成本 1.25 倍）或 1 小时（写入成本 2 倍，适合消息间隔较长的 Gateway 场景）。如果缓存完全失效——不会崩溃，只是退回到正常的全量计费。这是一个"有则更好，无则不损"的优化。
 
@@ -403,7 +408,7 @@ flowchart LR
 
 ### 子 Agent：横向分拆任务
 
-用户说"分析这三个文件然后写一份报告"——分析可以并行，写报告要等分析完成。如果单个 Agent 串行做，时间是三倍。`tools/delegate_tool.py` 让 Agent 能 spawn 子 Agent 并行处理子任务。
+如果说父 Agent 是项目经理，子 Agent 就是它外包出去的专项承包商——拿到明确的子任务、有独立的预算，完成后汇报结果。用户说"分析这三个文件然后写一份报告"——分析可以并行，写报告要等分析完成。如果单个 Agent 串行做，时间是三倍。`tools/delegate_tool.py` 让 Agent 能 spawn 子 Agent 并行处理子任务。
 
 ```mermaid
 %%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 15, "rankSpacing": 25}}}%%
