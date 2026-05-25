@@ -97,10 +97,10 @@ flowchart TD
 
 **图：AIAgent 与调用者、LLM API、工具层、持久化层的四向协作关系**
 
-1. **向上（调用者）**：CLI、Gateway 或父 Agent 通过少数几个方法和 Agent 交互——`run_conversation()` 发消息拿回复（`run_agent.py:4053`）、`interrupt()` 中断（`run_agent.py:1627`）、`steer()` 温和重定向（`run_agent.py:1728`）、`switch_model()` 热切换模型（`run_agent.py:599`）、`close()` 释放资源（`run_agent.py:2099`）
-2. **向左（LLM API）**：通过 Transport 抽象层调用模型。Agent 不直接和 API 打交道——Transport 负责格式转换和协议适配
-3. **向下（工具层）**：通过 `model_tools.handle_function_call()` 调度 72 个工具。特殊的是 `delegate_tool`——它会反向创建新的 AIAgent，形成递归结构
-4. **向右（持久化）**：SQLite 存会话、MEMORY.md/USER.md 存跨会话记忆、trajectory 存训练数据、checkpoint 存文件系统快照
+1. **调用者接口**：CLI、Gateway 或父 Agent 通过少数几个方法和 Agent 交互——`run_conversation()` 发消息拿回复（`run_agent.py:4053`）、`interrupt()` 中断（`run_agent.py:1627`）、`steer()` 温和重定向（`run_agent.py:1728`）、`switch_model()` 热切换模型（`run_agent.py:599`）、`close()` 释放资源（`run_agent.py:2099`）
+2. **LLM API**：通过 Transport 抽象层调用模型。Agent 不直接和 API 打交道——Transport 负责格式转换和协议适配
+3. **工具层**：通过 `model_tools.handle_function_call()` 调度 72 个工具。特殊的是 `delegate_tool`——它会反向创建新的 AIAgent，形成递归结构
+4. **持久化层**：SQLite 存会话、MEMORY.md/USER.md 存跨会话记忆、trajectory 存训练数据、checkpoint 存文件系统快照
 
 #### AIAgent 的参数设计
 
@@ -214,16 +214,16 @@ flowchart TD
 ```mermaid
 %%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 15, "rankSpacing": 25}}}%%
 flowchart TD
-    subgraph SYS ["① system message"]
+    subgraph SYS ["❶ system message"]
         direction LR
         STABLE["stable: SOUL.md · 工具引导 · 技能 · 环境 · 平台 · 等"] --> CONTEXT["context: AGENTS.md · system_message"] --> VOLATILE["volatile: MEMORY.md · USER.md · 日期"]
     end
 
-    subgraph TOOLS_S ["② tools: 72 个工具 schema · ~20K–30K+ token"]
+    subgraph TOOLS_S ["❷ tools: 72 个工具 schema · ~20K–30K+ token"]
         T1["terminal · read_file · web_search · delegate_task · ..."]
     end
 
-    subgraph MSGS ["③ messages: 对话历史 + 当前消息"]
+    subgraph MSGS ["❸ messages: 对话历史 + 当前消息"]
         direction LR
         H1["user: 搜索漏洞"] --> H2["assistant: tool_call"] --> H3["tool: 结果"] --> H4["assistant: 回复"] --> H5["user: 整理成表格 + 记忆注入"]
     end
@@ -233,7 +233,7 @@ flowchart TD
 
 **图：一次 API 调用中 LLM 收到的完整结构**
 
-#### ① system message——告诉 LLM "你是谁、在哪里、能做什么"
+#### ❶ system message——告诉 LLM "你是谁、在哪里、能做什么"
 
 LLM 本身不知道自己运行在什么环境里——它不知道用户在 Telegram 上还是终端里，不知道有哪些工具可用，不知道用户的偏好。系统提示的作用是**给 LLM 提供做决策所需的全部上下文**。
 
@@ -245,13 +245,13 @@ LLM 本身不知道自己运行在什么环境里——它不知道用户在 Tel
 
 三层的排列顺序不是随意的——stable 层放最前面，因为 Prompt Caching 的前缀匹配从第一个字节开始。如果把 volatile 层（每个会话都不同的记忆快照）放在 stable 层前面，所有会话的缓存前缀都不同，缓存就废了。
 
-#### ② tools——告诉 LLM "你有哪些工具可以用"
+#### ❷ tools——告诉 LLM "你有哪些工具可以用"
 
 72 个工具的 function-calling JSON schema，以 OpenAI 格式定义（每个工具包含 name、description、parameters）。这部分可能占 **20,000-30,000+ token**——是单次 API 调用中 token 开销最大的部分之一。
 
 工具 schema 每轮都完全相同（工具集在会话内不变），所以 Prompt Caching 对它的节省效果最显著——不缓存的话，每轮对话都要为同样的 20K+ token 付费。
 
-#### ③ messages——对话历史 + 当前消息
+#### ❸ messages——对话历史 + 当前消息
 
 消息列表包含完整的对话历史：用户消息、assistant 回复、工具调用（`tool_calls`）和工具结果（`tool` 角色消息）。LLM 需要看到之前的工具调用和结果才能理解上下文——如果它上一轮搜索了网页，这一轮被要求"整理成表格"，它需要看到搜索结果才知道整理什么。
 
