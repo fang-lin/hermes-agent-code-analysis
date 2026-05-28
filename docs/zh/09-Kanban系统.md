@@ -73,10 +73,12 @@ kanban:
 | 问题 | 排查方向 |
 |------|---------|
 | 任务一直停在 todo | 检查是否有未完成的父任务（`kanban show` 看 parents）；`recompute_ready()` 只有父任务全部 done 才提升 |
-| Worker 一直不 spawn | 检查 `dispatch_in_gateway: true`；确认 assignee 是有效的 Profile（`hermes profile list`） |
-| Worker 反复失败 | 检查 `consecutive_failures` 和 `last_failure_error`（`kanban show`）；超过 `failure_limit`（默认 2）会自动阻塞 |
+| 任务在 ready 但不 spawn | ① `hermes kanban tail <id>` 看是否有 `respawn_guarded` 事件——三种原因：`blocker_auth`（API 限额）、`recent_success`（1h 内已完成）、`active_pr`（24h 内有 PR） ② 确认 assignee 是有效 Profile（`hermes profile list`） ③ 检查 `dispatch_in_gateway: true` |
+| Worker 反复失败 | 检查 `consecutive_failures` 和 `last_failure_error`（`kanban show`）；超过 `failure_limit`（默认 2）会自动阻塞（`gave_up` 事件，非 sticky） |
+| blocked 后不自动恢复 | 查 `task_events` 最近的事件：如果是 `blocked`（Worker 主动阻塞），需手动 `kanban unblock`；如果是 `gave_up`（自动阻塞），应该在父任务完成后自动恢复 |
 | 任务卡在 running | Worker 可能崩溃但 PID 还在——`kanban reclaim` 强制释放；或等 `detect_crashed_workers()` 自动检测 |
-| 心跳超时 | Worker 长时间未调用 `kanban_heartbeat`——检查 `dispatch_stale_timeout_seconds` 配置 |
+| kanban_complete 失败 | 检查 `created_cards` 参数——如果声明的 task_id 不存在或非本 Worker 创建，触发 `HallucinatedCardsError` |
+| Worker 输出在哪 | `hermes kanban log <task_id>` 或直接看 `<board-root>/logs/<task_id>.log` |
 
 > 📖 **延伸阅读（官方文档）：**
 > - [Kanban 系统](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban)
@@ -100,15 +102,36 @@ flowchart TD
     RUNNING -->|"kanban_complete#40;#41;"| DONE["done"]
     RUNNING -->|"kanban_block#40;#41;"| BLOCKED["blocked<br/>等待人工"]
     BLOCKED -->|"unblock_task#40;#41;"| READY
-    RUNNING -->|崩溃/超时| BLOCKED
+    RUNNING -->|"崩溃/超时<br/>#40;gave_up 事件#41;"| BLOCKED
     DONE -->|"archive_task#40;#41;"| ARCHIVED["archived"]
-    RUNNING -->|"promote → review"| REVIEW["review<br/>审查中"]
-    REVIEW -->|审查通过| DONE
+    TODO -->|"schedule_task#40;#41;"| SCHED["scheduled<br/>等待时间条件"]
+    SCHED -->|"unblock_task#40;#41;"| READY
+    RUNNING -->|"外部触发<br/>CLI promote"| REVIEW["review<br/>审查管道"]
+    REVIEW -->|"claim_review_task#40;#41;<br/>review Agent 完成"| DONE
 ```
 
 **图：Kanban 任务状态机（9 种状态）**
 
-任务的 9 种状态（`kanban_db.py:99`）：`triage`（待规格化）→ `todo`（有依赖未完成）→ `scheduled`（预约）→ `ready`（可调度）→ `running`（执行中）→ `blocked`（阻塞）↔ `review`（审查中）→ `done`（完成）→ `archived`（归档）。
+任务的 9 种状态（`kanban_db.py:99`）：
+
+- **triage** — 待规格化，用 `kanban specify` 或 `kanban decompose` 充实后进入 todo
+- **todo** — 有未完成的父任务依赖，`recompute_ready()` 在父任务全部 done 时提升到 ready
+- **scheduled** — 时间驱动的等待（对应 Cron 调度，见 11 章）。和 `blocked` 的区别：blocked 等人工干预，scheduled 等时间条件。**不被 `recompute_ready()` 处理**——需要外部触发 `unblock_task()` 退出（`kanban_db.py:3879`）
+- **ready** — 可调度，Dispatcher 下一轮 tick 会尝试 spawn
+- **running** — Worker 正在执行
+- **blocked** — 分两种（见下方详解）：Worker 主动阻塞（sticky）和 Dispatcher 自动阻塞（非 sticky）
+- **review** — 审查管道。**不是 Worker 通过工具触发的**——Worker 应使用 `kanban_block(reason="review-required: ...")` 请求审查。`review` 状态需要外部触发（CLI `kanban promote --status review`），Dispatcher 为 review Worker 强制加载 `sdlc-review` 技能
+- **done** — 完成
+- **archived** — 归档（scratch workspace 会被清理）
+
+**两种 blocked 的关键区别**（`_has_sticky_block()`，`kanban_db.py:2191`）：
+
+| 类型 | 触发方式 | 事件类型 | 恢复方式 |
+|------|---------|---------|---------|
+| Sticky block | Worker/人工调用 `kanban_block()` | `"blocked"` | 只有 `kanban_unblock` 能恢复 |
+| 自动阻塞 | `consecutive_failures ≥ failure_limit` | `"gave_up"` | 非 sticky——`recompute_ready()` 在父任务完成后**自动恢复** |
+
+这个区别直接影响诊断：如果任务 blocked 后父任务完成却没自动变 ready，查 `task_events` 里最近的事件是 `blocked`（sticky，需手动 unblock）还是 `gave_up`（非 sticky，应该自动恢复，如果没恢复说明有其他问题）。
 
 ### Dispatcher：调度引擎
 
@@ -122,9 +145,19 @@ Dispatcher 是 Kanban 系统的心脏，嵌入在 Gateway 进程内作为 asynci
 4. **检测崩溃的 Worker**（`detect_crashed_workers()`）——PID 已不存在的任务自动阻塞
 5. **超时强制终止**（`enforce_max_runtime()`）——超过 `max_runtime_seconds` 的 Worker 收到 SIGTERM
 6. **提升就绪任务**（`recompute_ready()`）——父任务全部 done 时，todo → ready
-7. **调度 ready 任务**——按 `priority DESC, created_at ASC` 排序，对每个 ready 任务：claim（CAS 原子操作）→ 解析 workspace → spawn Worker 子进程
+7. **调度 ready 任务**——按 `priority DESC, created_at ASC` 排序，对每个 ready 任务执行五步管道：
+   - ① **Profile 存在性检查**——assignee 不是真实 Hermes Profile 的任务跳过（`skipped_nonspawnable`），支持外部 Agent（以 Claude Code 为例）通过 `claim_task()` 手动认领
+   - ② **Respawn Guard**（`check_respawn_guard()`，`kanban_db.py:4867`）——三条防抖规则，**任何一条触发都跳过本轮 spawn**，写入 `respawn_guarded` 事件：
+     - `blocker_auth`：`last_failure_error` 包含 `quota`/`rate_limit`/`429`/`403`/`auth` 等关键词——API 限额/认证问题不应反复重试
+     - `recent_success`：1 小时内（`_RESPAWN_GUARD_SUCCESS_WINDOW = 3600`）有 completed run——防止已完成任务被重复 spawn
+     - `active_pr`：24 小时内（`_RESPAWN_GUARD_PR_WINDOW = 86400`）comment 中出现 GitHub PR URL——防止重复创建 PR
+   - ③ **claim_task()**——CAS 原子操作（ready → running）
+   - ④ **resolve_workspace()**——根据 `workspace_kind` 创建临时目录/持久目录/git worktree
+   - ⑤ **_default_spawn()**——fork Worker 子进程
 
 第 7 步还有一个 **review lane**：status=review 的任务也会被调度，Dispatcher 为 review Worker 强制加载 `sdlc-review` 技能。
+
+**与 Dispatcher 并行的 Notifier**：Gateway 还运行 `_kanban_notifier_watcher()`（`gateway/run.py:4609`），每 5 秒轮询 `kanban_notify_subs` 表，把任务的 terminal 事件（completed/blocked/crashed 等）通过平台 adapter 推送给原始请求者（以 Telegram/Slack 为例）。这是 human-in-the-loop 闭环的关键——Worker 完成后怎么通知用户？Dashboard 的 WebSocket 用于浏览器，Notifier 用于消息平台。
 
 **Spawn Worker 的具体命令**（`_default_spawn()`，`kanban_db.py:5560`）：
 
@@ -132,9 +165,24 @@ Dispatcher 是 Kanban 系统的心脏，嵌入在 Gateway 进程内作为 asynci
 hermes -p <assignee> --accept-hooks --skills kanban-worker [--skills ...] [-m model] chat -q "work kanban task <task_id>"
 ```
 
-Dispatcher 为 Worker 设置一组环境变量：`HERMES_KANBAN_TASK`（任务 ID）、`HERMES_KANBAN_WORKSPACE`（工作目录）、`HERMES_KANBAN_RUN_ID`（当前 run 编号）、`HERMES_KANBAN_CLAIM_LOCK`（claim 标识）、`HERMES_KANBAN_DB`（数据库路径）、`HERMES_PROFILE`（Worker 的 Profile 名）。
+Dispatcher 为 Worker 注入完整的环境变量（`kanban_db.py:5607-5641`）：
 
-**防抖机制**：连续失败的任务有 respawn guard——`consecutive_failures` 达到 `failure_limit`（默认 2）后自动阻塞，防止 crash-loop。
+| 环境变量 | 用途 |
+|---------|------|
+| `HERMES_KANBAN_TASK` | 任务 ID（Worker 模式的标识） |
+| `HERMES_KANBAN_WORKSPACE` | 工作目录 |
+| `HERMES_KANBAN_RUN_ID` | 当前 run 编号 |
+| `HERMES_KANBAN_CLAIM_LOCK` | claim 标识 |
+| `HERMES_KANBAN_DB` | 数据库路径 |
+| `HERMES_KANBAN_BOARD` | Board slug |
+| `HERMES_KANBAN_WORKSPACES_ROOT` | workspace 基目录 |
+| `HERMES_KANBAN_BRANCH` | git 分支名（仅 worktree 类型） |
+| `HERMES_PROFILE` | Worker 的 Profile 名 |
+| `HERMES_HOME` | Profile-scoped 配置目录 |
+| `HERMES_TENANT` | 多租户命名空间 |
+| `TERMINAL_TIMEOUT` | 从 `max_runtime_seconds - 30s` 计算的终端超时 |
+
+**Worker 日志**：Worker 的 stdout/stderr 写入 `<board-root>/logs/<task_id>.log`（append 模式，re-run 不覆盖）。默认 2MiB 轮转，保留 1 个备份。通过 `hermes kanban log <task_id>` 查看。
 
 ### Task 数据结构
 
@@ -161,9 +209,17 @@ Dispatcher 为 Worker 设置一组环境变量：`HERMES_KANBAN_TASK`（任务 I
 
 Run 的 `summary`（1-3 句话描述做了什么）和 `metadata`（结构化数据，如 `changed_files`、`tests_run`）是**跨 run 上下文传递的核心机制**——下一个 Worker 通过 `build_worker_context()` 看到前次 run 的 summary 和 metadata，能接续工作。
 
+`kanban_complete()` 的完整执行链（`kanban_db.py:2854`）不只是"状态变 done"：
+
+1. **created_cards 幻觉验证**——如果 Worker 在 `created_cards` 参数中声明创建了某些 task_id，系统验证这些 ID 真实存在且由该 Worker 创建。虚假引用触发 `HallucinatedCardsError`，**阻止完成**
+2. **DB 事务**——status=done，关闭 run，重置 `consecutive_failures`
+3. **散文幻觉扫描**——扫描 summary 和 result 中的 `t_<hex>` 引用，不存在的发出 `suspected_hallucinated_references` 事件（advisory，不阻塞）
+4. **`recompute_ready()`**——触发子任务状态提升（todo → ready）
+5. **Workspace 清理**——scratch 类型的工作目录 + tmux session 被清理
+
 ### 数据库：SQLite + WAL
 
-Kanban 数据存储在 SQLite 数据库中（`~/.hermes/kanban/<board>/kanban.db`），使用 WAL 模式允许 Dispatcher 写入时 Dashboard 仍可读取。
+Kanban 数据存储在 SQLite 数据库中，使用 WAL 模式允许 Dispatcher 写入时 Dashboard 仍可读取。`default` board 的数据库在 `~/.hermes/kanban.db`（向后兼容，不在 boards 子目录下），其他 board 在 `~/.hermes/kanban/boards/<slug>/kanban.db`。Board 解析有 4 层优先级：`board=` 参数 > `HERMES_KANBAN_BOARD` 环境变量 > `HERMES_KANBAN_DB` 环境变量 > `~/.hermes/kanban/current` 符号链接。
 
 6 张表：
 
