@@ -11,7 +11,7 @@
 
 ## 为什么需要 Kanban？
 
-单个 Agent 能完成的任务有上限——上下文窗口有限、单线程执行、一个模型不擅长所有事。当任务复杂到需要"前端工程师写 UI、后端工程师写 API、QA 做测试"时，你需要**多个 Agent 各司其职、协调工作**。
+单个 Agent 能完成的任务有上限——上下文窗口有限、单线程执行、一个模型不擅长所有事。当任务复杂到需要"一个 Agent 负责前端代码、一个负责后端 API、一个负责测试验证"时——这是单个 Agent 的上下文窗口和执行模式无法胜任的，你需要**多个 Agent 各司其职、协调工作**。
 
 hermes-agent 的 Kanban 系统就是为此设计的。它不是简单的任务队列——它是一个完整的项目管理系统，支持任务依赖、自动调度、失败恢复、审查流程和多租户隔离。一个编排者 Agent 把大任务拆成子任务卡片，分配给不同 Profile 的 Worker Agent，Dispatcher 自动在后台调度执行。
 
@@ -106,7 +106,7 @@ flowchart TD
     DONE -->|"archive_task#40;#41;"| ARCHIVED["archived"]
     TODO -->|"schedule_task#40;#41;"| SCHED["scheduled<br/>等待时间条件"]
     SCHED -->|"unblock_task#40;#41;"| READY
-    RUNNING -->|"外部触发<br/>CLI promote"| REVIEW["review<br/>审查管道"]
+    RUNNING -->|"外部触发<br/>#40;直接 DB/自动化#41;"| REVIEW["review<br/>审查管道"]
     REVIEW -->|"claim_review_task#40;#41;<br/>review Agent 完成"| DONE
 ```
 
@@ -116,11 +116,11 @@ flowchart TD
 
 - **triage** — 待规格化，用 `kanban specify` 或 `kanban decompose` 充实后进入 todo
 - **todo** — 有未完成的父任务依赖，`recompute_ready()` 在父任务全部 done 时提升到 ready
-- **scheduled** — 时间驱动的等待（对应 Cron 调度，见 11 章）。和 `blocked` 的区别：blocked 等人工干预，scheduled 等时间条件。**不被 `recompute_ready()` 处理**——需要外部触发 `unblock_task()` 退出（`kanban_db.py:3879`）
+- **scheduled** — 时间驱动的等待（对应 Cron 调度，见 11 章）。和 `blocked` 的区别：blocked 等人工干预，scheduled 等时间条件。**不被 `recompute_ready()` 处理**——需要外部触发 `unblock_task()`（`kanban_db.py:3377`）退出
 - **ready** — 可调度，Dispatcher 下一轮 tick 会尝试 spawn
 - **running** — Worker 正在执行
 - **blocked** — 分两种（见下方详解）：Worker 主动阻塞（sticky）和 Dispatcher 自动阻塞（非 sticky）
-- **review** — 审查管道。**不是 Worker 通过工具触发的**——Worker 应使用 `kanban_block(reason="review-required: ...")` 请求审查。`review` 状态需要外部触发（CLI `kanban promote --status review`），Dispatcher 为 review Worker 强制加载 `sdlc-review` 技能
+- **review** — 审查管道。**不是 Worker 通过工具触发的**——Worker 应使用 `kanban_block(reason="review-required: ...")` 请求审查。`review` 状态需要通过直接数据库操作或外部自动化设置（代码中没有 Python API 将任务转为 review），Dispatcher 为 review Worker 强制加载 `sdlc-review` 技能
 - **done** — 完成
 - **archived** — 归档（scratch workspace 会被清理）
 
@@ -219,7 +219,7 @@ Run 的 `summary`（1-3 句话描述做了什么）和 `metadata`（结构化数
 
 ### 数据库：SQLite + WAL
 
-Kanban 数据存储在 SQLite 数据库中，使用 WAL 模式允许 Dispatcher 写入时 Dashboard 仍可读取。`default` board 的数据库在 `~/.hermes/kanban.db`（向后兼容，不在 boards 子目录下），其他 board 在 `~/.hermes/kanban/boards/<slug>/kanban.db`。Board 解析有 4 层优先级：`board=` 参数 > `HERMES_KANBAN_BOARD` 环境变量 > `HERMES_KANBAN_DB` 环境变量 > `~/.hermes/kanban/current` 符号链接。
+Kanban 数据存储在 SQLite 数据库中，使用 WAL 模式允许 Dispatcher 写入时 Dashboard 仍可读取。`default` board 的数据库在 `~/.hermes/kanban.db`（向后兼容，不在 boards 子目录下），其他 board 在 `~/.hermes/kanban/boards/<slug>/kanban.db`。数据库路径解析优先级（`kanban_db.py:314`）：`HERMES_KANBAN_DB` 环境变量（最高，直接 pin 路径）> `board=` 参数 > `HERMES_KANBAN_BOARD` 环境变量 > `~/.hermes/kanban/kanban/current` 文本文件（由 `hermes kanban boards switch` 写入，内容为 board slug）。
 
 6 张表：
 
@@ -251,16 +251,19 @@ Kanban 数据存储在 SQLite 数据库中，使用 WAL 模式允许 Dispatcher 
 - **Worker 模式**（`_check_kanban_mode()`）：`HERMES_KANBAN_TASK` 环境变量存在（Dispatcher spawn 的）。Worker 只能操作自己的任务——`_enforce_worker_task_ownership()` 确保 Worker 不能篡改其他任务
 - **编排者模式**（`_check_kanban_orchestrator_mode()`）：Profile 的 `toolsets` 包含 `kanban`，但没有 `HERMES_KANBAN_TASK`。编排者能用 `kanban_list`（Worker 不能）和 `kanban_unblock`
 
-| 工具 | Worker | 编排者 |
-|------|--------|--------|
-| `kanban_show` | ✅（仅自己的任务） | ✅ |
-| `kanban_complete` | ✅ | ❌ |
-| `kanban_block` | ✅ | ❌ |
-| `kanban_heartbeat` | ✅ | ❌ |
-| `kanban_comment` | ✅ | ✅ |
-| `kanban_create` | ✅（创建子任务） | ✅ |
-| `kanban_list` | ❌ | ✅ |
-| `kanban_unblock` | ❌ | ✅ |
+| 工具 | check_fn | Worker | 编排者 | 备注 |
+|------|---------|--------|--------|------|
+| `kanban_show` | kanban_mode | ✅（仅自己的任务） | ✅（任意任务） | |
+| `kanban_complete` | kanban_mode | ✅ | ✅ | Worker 有 ownership 限制 |
+| `kanban_block` | kanban_mode | ✅ | ✅ | Worker 有 ownership 限制 |
+| `kanban_heartbeat` | kanban_mode | ✅ | ✅ | Worker 有 ownership 限制 |
+| `kanban_comment` | kanban_mode | ✅ | ✅ | |
+| `kanban_create` | kanban_mode | ✅（创建子任务） | ✅ | |
+| `kanban_link` | kanban_mode | ✅ | ✅ | 添加父→子依赖 |
+| `kanban_list` | orchestrator_only | ❌ | ✅ | |
+| `kanban_unblock` | orchestrator_only | ❌ | ✅ | |
+
+`kanban_mode` 对 Worker 和编排者都返回 True，但 Worker 受 `_enforce_worker_task_ownership()` 限制——只能操作自己的任务（`HERMES_KANBAN_TASK`）。编排者（没有 `HERMES_KANBAN_TASK`）不受 ownership 限制。`orchestrator_only` 则完全排除 Worker。
 
 ### 技能引导
 
