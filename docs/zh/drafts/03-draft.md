@@ -305,6 +305,16 @@ flowchart TD
 
 特殊处理：`read_file` 虽然注册时设置了 `max_result_size_chars=100_000`，但 `budget_config.py:12` 的 `PINNED_THRESHOLDS` 在运行时将其覆盖为 `float('inf')`——因为如果 read_file 结果也被持久化，模型就需要用 read_file 读 read_file 的持久化结果，陷入无限循环。这个覆盖机制通过 `BudgetConfig.resolve_threshold()` 实现，优先级链为：pinned → tool_overrides → registry → default。
 
+### Computer Use：桌面控制
+
+除了浏览器工具（`browser_tool.py`，控制浏览器页面），hermes-agent 还有一个**桌面级**的自动化工具——`computer_use`（`tools/computer_use/` 子目录，5 个文件）。
+
+Computer Use 基于 macOS 的 cua-driver（一个独立安装的 MCP stdio 二进制），让 Agent 能控制整个桌面——点击按钮、输入文字、截屏分析。和浏览器工具的关键区别：浏览器工具只能操作浏览器页面，Computer Use 能操作任何 GUI 应用（以 Finder、系统偏好设置为例）。
+
+一个重要的设计选择：`computer_use` 的 schema 使用 OpenAI function-calling 格式（`tools/computer_use/schema.py`），而非 Anthropic 的原生 Computer Use 格式——这意味着**所有支持工具调用的模型**都能驱动它，不限于 Claude。
+
+通过 `hermes tools` 安装 cua-driver，配置后在 `config.yaml` 中启用 `computer_use` 工具集。
+
 ### 终端后端：8 种执行环境
 
 Agent 的 `terminal` 工具不一定在本地执行命令。`tools/environments/` 提供了 8 种后端：

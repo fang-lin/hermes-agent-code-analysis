@@ -95,7 +95,7 @@ display:
 > - [CLI 使用指南](https://hermes-agent.nousresearch.com/docs/user-guide/cli)
 > - [配置参考](https://hermes-agent.nousresearch.com/docs/user-guide/configuration)
 > - [Profile 管理](https://hermes-agent.nousresearch.com/docs/user-guide/profiles)
-> - [插件开发](https://hermes-agent.nousresearch.com/docs/developer-guide/contributing)
+> - [插件系统](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins)
 
 ---
 

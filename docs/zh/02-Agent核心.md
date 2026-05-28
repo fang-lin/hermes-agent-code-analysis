@@ -454,6 +454,37 @@ flowchart TD
 
 成功的写入 `trajectory_samples.jsonl`，失败的写入 `failed_trajectories.jsonl`——失败案例对研究者同样有价值，甚至更有价值（"模型在哪里犯错"和"做对了什么"一样重要）。Nous Research 用这些轨迹训练下一代工具调用模型，这是 Hermes "research-ready" 定位的基础设施之一。默认关闭，主要被 `batch_runner.py` 和 RL 研究流程使用。
 
+### 辅助模型：侧任务的统一调度器
+
+上下文压缩需要用一个"廉价模型"做摘要，视觉分析需要一个"能看图的模型"做描述，网页提取需要一个模型做内容清洗——这些"侧任务"不应该占用主模型的配额和延迟。
+
+`agent/auxiliary_client.py`（5,319 行）是所有侧任务的统一路由器。`call_llm()`（`auxiliary_client.py:4602`）接收任务类型（文本/视觉），按以下优先级解析辅助模型：
+
+1. 主 Provider 的辅助能力（以 Anthropic 的 haiku 为例）
+2. OpenRouter（如果配置了 Key）
+3. Nous Portal（如果已登录）
+4. 用户配置的自定义辅助端点（`config.yaml` 的 `auxiliary` 节）
+5. Anthropic 直连
+6. 直连的 API Key
+7. 最终 fallback：用主模型自身
+
+视觉任务和文本任务走不同的解析路径——视觉需要多模态模型，文本只需要廉价快速的模型。如果所有 fallback 都不可用，侧任务静默失败（以上下文压缩为例，压缩失败后退回到不压缩继续工作，600 秒内不再尝试）。
+
+这个组件被上下文压缩（`context_compressor.py`）、记忆审查（`background_review.py`）、视觉分析（`vision_tools.py`）、网页提取（`web_tools.py`）、smart 审批（`approval.py`）等多个消费者共用——它们都不需要关心辅助模型从哪来，只需要调用 `call_llm()` 并拿到结果。
+
+### ContextEngine：可插拔的上下文策略
+
+`agent/context_engine.py`（`ContextEngine` ABC，`context_engine.py:32`）定义了上下文管理的可插拔接口。默认实现是 `ContextCompressor`（"保头保尾压中间"的摘要策略），但第三方引擎（以 LCM 为例）可以通过插件替换它。
+
+ContextEngine 的五个生命周期方法：
+1. `on_session_start()` — 会话开始时初始化
+2. `update_from_response(usage)` — 每次 LLM 调用后更新 token 计数
+3. `should_compress(prompt_tokens)` — 判断是否需要压缩
+4. `compress(messages, system_prompt)` — 执行压缩
+5. `on_session_end()` — 会话结束时清理
+
+配置通过 `context.engine` 控制（默认 `"compressor"`）。同一时间只有一个引擎活跃。引擎还维护关键状态（`threshold_tokens`、`context_length`、`compression_count`），`run_agent.py` 直接读取这些值做预飞压缩判断和日志记录。
+
 上面讨论的几个机制——缓存、重试、凭证轮换、Fallback——都在底层默默运作。但还有两个问题需要在 Agent 运行之前解决：模型的上下文窗口有多大？Agent 是否健康、花了多少钱？
 
 ### Model Metadata：在混乱的生态中找到模型的真实参数

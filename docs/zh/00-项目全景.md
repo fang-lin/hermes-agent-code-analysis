@@ -319,7 +319,7 @@ graph TD
     ABC --> RT["ResponsesApiTransport<br/>OpenAI Codex / xAI"]
 ```
 
-**图：Transport 抽象层将 20+ 个 Provider 统一为四种实现**
+**图：Transport 抽象层将 30+ 个 Provider 统一为核心四种实现（另有 Gemini native adapter 等专用路径）**
 
 为什么不用更简单的 if-else 分支？Hermes 早期就是这么做的，但随着 Provider 从几个增长到 20+，if-else 让 `run_agent.py` 变得不可维护，于是提取为独立的 Transport 层。新增一个 Provider 只需实现四个方法，不需要改动 Agent 核心。如果某个 Transport 有 bug，影响范围被限制在使用该 Transport 的 Provider 内。
 
