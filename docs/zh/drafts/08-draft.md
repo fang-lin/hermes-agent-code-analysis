@@ -110,7 +110,7 @@ image_gen:
 
 `plugins/model-providers/` 包含 30 个子目录（1,199 行），每个实现一个 LLM Provider 的注册逻辑。这是 01 章提到的 `PROVIDER_REGISTRY` 自动扩展机制（`auth.py:459`）的具体实现——每个插件在加载时把自己的 `ProviderConfig` 注册到认证系统。
 
-共性模式：每个 model-provider 插件继承 `ProviderProfile` 并调用 `register_provider()` 注册。`ProviderProfile` 的核心字段包括 `name`、`aliases`、`env_vars`、`base_url`、`auth_type`、`api_mode`、`models_url` 等。
+共性模式：每个 model-provider 插件继承 `ProviderProfile`（描述一个 LLM 提供商的元数据——名称、认证方式、API 端点和模型列表获取方式的数据类）并调用 `register_provider()` 注册。`ProviderProfile` 的核心字段包括 `name`、`aliases`、`env_vars`、`base_url`、`auth_type`、`api_mode`、`models_url` 等。
 
 大多数简单 Provider（以 DeepSeek 为例）只需声明字段，约 40-50 行。但复杂 Provider（以 OpenRouter 为例，115 行）还需要覆写方法——`build_extra_body()`（构建 OpenRouter 特有的请求体参数）、`build_api_kwargs_extras()`（注入额外的 API 参数）、`fetch_models()`（自定义模型列表获取逻辑）。这是"声明式 + 可选扩展"的两层设计——简单场景声明即可，复杂场景覆写方法。
 
@@ -175,7 +175,7 @@ Honcho 是最复杂的——07 章已经讲过它的开销感知机制（`contex
 | ntfy | ~500 | ntfy.sh 推送通知 |
 | Simplex | ~800 | SimpleX Chat（隐私优先） |
 
-Discord 是最大的——它不只是消息收发，还实现了 Discord 特有的能力（语音通道、斜杠命令注册、角色权限、频道级技能绑定）。其他平台相对简洁，主要是 `BasePlatformAdapter` 的标准实现。
+Discord 是最大的——它不只是消息收发，还实现了 Discord 特有的能力（语音通道、斜杠命令注册、角色权限、频道级技能绑定）。其他平台相对简洁，主要是 `BasePlatformAdapter`（05 章定义的平台适配器基类）的标准实现。
 
 #### browser（云浏览器后端，820 行）
 
@@ -185,7 +185,7 @@ Discord 是最大的——它不只是消息收发，还实现了 Discord 特有
 
 通过 `ctx.register_web_search_provider()` 注册搜索和网页提取后端。包括 Firecrawl、Exa、Parallel Web、DuckDuckGo 等——`web_search` 和 `web_extract` 工具根据 `web.search_backend` 和 `web.extract_backend` 配置选择后端。
 
-### 外部集成插件
+### 外部集成插件：连接真实世界的服务
 
 #### spotify（音乐控制，955 行）
 
