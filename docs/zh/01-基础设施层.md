@@ -320,9 +320,9 @@ Provider 配置流程虽然多，但它们之间高度相似（都是"选模型 
 | 00 — 项目全景 | hermes_cli 是 00 中"入口层"的具体实现 |
 | 02 — Agent 核心 | hermes_cli 创建并配置 AIAgent 实例，通过 `runtime_provider` 提供凭证 |
 | 03 — 工具系统 | `tools_config.py` 管理工具集的启用/禁用 |
-| 04 — 网关层 | `gateway.py` 管理网关进程的生命周期 |
-| 06 — 插件框架 | `plugins.py` 是插件系统的宿主端实现 |
-| 10 — Kanban 系统 | `kanban.py` + `kanban_db.py` 是 Kanban 的 CLI 入口和持久化层 |
+| 05 — 网关层 | `gateway.py` 管理网关进程的生命周期 |
+| 07 — 插件框架 | `plugins.py` 是插件系统的宿主端实现 |
+| 09 — Kanban 系统 | `kanban.py` + `kanban_db.py` 是 Kanban 的 CLI 入口和持久化层 |
 
 ---
 

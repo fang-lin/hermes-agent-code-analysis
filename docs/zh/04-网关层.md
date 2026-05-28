@@ -294,8 +294,8 @@ gateway/
 | 00 — 项目全景 | Gateway 是 00 章"平台碎片化"问题的解决方案 |
 | 01 — 基础设施层 | `hermes_cli/gateway.py` 管理 Gateway 进程的生命周期 |
 | 02 — Agent 核心 | Gateway 创建并缓存 AIAgent 实例，通过 `run_conversation()` 执行 |
-| 06 — 插件框架 | 插件平台（Discord 等）通过 `plugins/platforms/` 注册 |
-| 12 — 批量运行与调度 | Cron 任务通过 Gateway 投递结果 |
+| 07 — 插件框架 | 插件平台（Discord 等）通过 `plugins/platforms/` 注册 |
+| 11 — Cron 调度 | Cron 任务通过 Gateway 投递结果 |
 
 ---
 

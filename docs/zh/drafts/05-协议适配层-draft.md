@@ -219,7 +219,7 @@ ACP 面向的是**编辑器↔代码助手**的双向交互——需要文件编
 | 01 — 基础设施层 | `hermes-acp` 入口在 `pyproject.toml:212` 注册 |
 | 02 — Agent 核心 | ACP 创建 AIAgent 实例执行对话 |
 | 03 — 工具系统 | ACP 使用 `hermes-acp` 工具集（核心工具的子集）；MCP Serve 不暴露工具 |
-| 04 — 网关层 | MCP Serve 依赖 Gateway 的 SessionDB 和审批队列 |
+| 05 — 网关层 | MCP Serve 依赖 Gateway 的 SessionDB 和审批队列 |
 
 ---
 

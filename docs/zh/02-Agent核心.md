@@ -578,8 +578,8 @@ v0.11.0 的错误处理是 if-else 硬编码。v0.14.0 引入了 `error_classifi
 | 00 — 项目全景 | Agent 核心循环和 Transport 层的概览已在 00 章给出 |
 | 01 — 基础设施层 | hermes_cli 负责创建 AIAgent 并注入凭证和配置 |
 | 03 — 工具系统 | Agent 通过 model_tools.py 调度工具，工具层是 Agent 的"手脚" |
-| 04 — 网关层 | Gateway 创建并缓存 AIAgent 实例（≤128 个） |
-| 06 — 插件框架 | 插件通过 PluginContext 注入钩子，在 Agent 循环的多个节点介入 |
+| 05 — 网关层 | Gateway 创建并缓存 AIAgent 实例（≤128 个） |
+| 07 — 插件框架 | 插件通过 PluginContext 注入钩子，在 Agent 循环的多个节点介入 |
 
 ---
 
