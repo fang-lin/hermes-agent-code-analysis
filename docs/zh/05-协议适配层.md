@@ -13,9 +13,9 @@
 
 到目前为止，用户通过两种方式和 Agent 交互：CLI 终端（直接对话）和消息网关（Telegram、Slack 等）。但还有两类调用者需要接入：
 
-**IDE 集成**——VS Code、Zed、JetBrains 等编辑器想把 hermes-agent 当作代码助手使用。这需要一个标准协议让编辑器和 Agent 双向通信——发送代码上下文、接收编辑建议、管理文件修改审批。这就是 ACP（Agent Communication Protocol）。
+**IDE 集成**——VS Code、Zed、JetBrains 等编辑器想把 hermes-agent 当作代码助手使用。这需要一个标准协议让编辑器和 Agent 双向通信——发送代码上下文、接收编辑建议、管理文件修改审批。这就是 **ACP**（Agent Communication Protocol，智能体通信协议）——一个定义了编辑器和 AI 代理之间会话管理、消息交换、工具调用、文件编辑审批等交互模式的开放协议。
 
-**AI 工具链集成**——Claude Code、Cursor 等 AI 工具想通过 hermes-agent 的消息网关能力读写各平台的消息。这需要一个不同的标准协议——MCP（Model Context Protocol）——把 Gateway 的会话管理和消息收发暴露为可调用的工具。
+**AI 工具链集成**——Claude Code、Cursor 等 AI 工具想通过 hermes-agent 的消息网关能力读写各平台的消息。这需要一个不同的标准协议——**MCP**（Model Context Protocol，模型上下文协议）——由 Anthropic 主导的开放协议，定义了 AI 应用和外部数据源/服务之间的标准接口。hermes-agent 用 MCP 把 Gateway 的会话管理和消息收发暴露为可调用的工具。
 
 两者都是把同一个 AIAgent 的能力包装成标准协议，但面向完全不同的场景：ACP 面向"Agent 帮你写代码"，MCP 面向"外部 AI 读写你的消息"。
 
