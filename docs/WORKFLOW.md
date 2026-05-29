@@ -68,7 +68,7 @@
 1. 读取 `prompts/depth-review.md`，启动深度审核 Agent
 2. **审核对象是草稿**——内容不够深就去审文学性和事实，是在给半成品打磨
 3. **启动审核 Agent 时，只传入 prompt 模板文件路径 + 待审核文档路径 + 源码目录路径。不要在内联指令中列出具体要验证的项目**
-4. **立即将审核报告保存到文件**：`docs/zh/reviews/XX-depth-review.md`
+4. **审核结论汇总进 `docs/zh/98-审核报告汇总.md`**（统计 + 主要补充项）——98 报告是权威记录，原始 Agent 报告不要求单独落盘
 
 ### 步骤 4：补充深度（主线 opus）
 
@@ -80,7 +80,7 @@
 
 1. 读取 `prompts/literary-review.md`，启动文学性审核 Agent
 2. **审核对象是深度补充后的草稿**
-3. **立即将审核报告保存到文件**：`docs/zh/reviews/XX-literary-review.md`
+3. **审核结论汇总进 `docs/zh/98-审核报告汇总.md`**（建议数 + 采纳的关键改进）
 
 ### 步骤 6：整合文学性建议 + 写正式文档（主线 opus）
 
@@ -92,7 +92,7 @@
 1. 读取 `prompts/factual-review.md`，启动事实审核 Agent
 2. **审核对象是正式文档（最终版本，包含所有深度补充和文学性修改）**
 3. 只传模板路径 + 文档路径 + 源码路径，不内联具体验证项
-4. **立即将审核报告保存到文件**：`docs/zh/reviews/XX-factual-review.md`
+4. **审核结论汇总进 `docs/zh/98-审核报告汇总.md`**（断言数 + ✅⚠️❌ 统计 + 主要修正项表格 + 二次验证结论）
 
 ### 步骤 8：二次验证 + 修正（主线 opus）
 
@@ -179,10 +179,10 @@ docs/
 │   ├── drafts/                — 草稿（可选保留）
 │   │   ├── 00-draft.md
 │   │   └── ...
-│   └── reviews/               — 审核报告（可选保留）
-│       ├── 00-factual-review.md
-│       ├── 00-literary-review.md
-│       └── ...
+│   └── reviews/               — 一次性方法论产物（非权威审核记录，见 reviews/README.md）
+│       ├── seed-test-results.md    — 审核 Agent 种子测试
+│       └── completeness-phase1.md  — 阶段 1 完整性审核
+│       （逐章审核结论汇总进 98-审核报告汇总.md，原始 Agent 报告不落盘）
 ├── en/
 │   ├── 00-project-overview.md
 │   └── ...
