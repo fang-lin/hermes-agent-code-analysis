@@ -176,13 +176,8 @@ docs/
 │   ├── 13-工程实践.md
 │   ├── 98-审核报告汇总.md
 │   ├── 99-工作日志.md
-│   ├── drafts/                — 草稿（可选保留）
-│   │   ├── 00-draft.md
-│   │   └── ...
-│   └── reviews/               — 一次性方法论产物（非权威审核记录，见 reviews/README.md）
-│       ├── seed-test-results.md    — 审核 Agent 种子测试
-│       └── completeness-phase1.md  — 阶段 1 完整性审核
-│       （逐章审核结论汇总进 98-审核报告汇总.md，原始 Agent 报告不落盘）
+│   └── drafts/                — 草稿（临时工作区，定稿后清空，不保留）
+│       └── XX-章节名-draft.md
 ├── en/
 │   ├── 00-project-overview.md
 │   └── ...
