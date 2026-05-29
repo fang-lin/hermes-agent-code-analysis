@@ -7,7 +7,7 @@
 ## 当前状态
 
 **阶段：生产阶段**
-**下一步：第 11 章（Cron 调度）**
+**下一步：第 12 章（批量运行与 RL）**
 
 ---
 
@@ -26,7 +26,7 @@
 | 08 — 内置插件 | ✅ 已完成 | 16 类插件按扩展方向分组 + 典型深拆 |
 | 09 — Kanban 系统 | ✅ 已完成 | 状态机（9 态+sticky block）、Dispatcher 七步+respawn guard、Worker 权限、Notifier |
 | 10 — 交互界面与运行模式 | ✅ 已完成 | 三界面分流 + 双线程模型 + turn 生命周期 + 模态状态机 + 6 运行模式 + 渲染管线 + tui_gateway + 皮肤 |
-| 11 — Cron 调度 | ⬜ 未开始 | 从原"批量运行与 RL"拆出 |
+| 11 — Cron 调度 | ✅ 已完成 | 文件驱动 + tick 四机制（at-most-once/grace/wake gate/SILENT）+ 三层并发安全 + 活性超时 + no-agent/context_from + 注入扫描 |
 | 12 — 批量运行与 RL | ⬜ 未开始 | |
 | 13 — 工程实践 | ⬜ 未开始 | |
 
