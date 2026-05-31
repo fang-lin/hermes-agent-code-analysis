@@ -448,6 +448,26 @@ flowchart TD
 
 无论是单 Agent 还是多层子 Agent，每次对话运行结束时，系统都可以把完整的执行轨迹保存下来——这就是 Trajectory 机制存在的原因。
 
+### LSP 集成：让 Agent 改代码时看见「红波浪线」
+
+VS Code 里的红波浪线——拼错变量名、类型不匹配、找不到符号——是背后的语言服务器实时分析报过来的。一个写代码的 Agent 如果缺少这个反馈，只能靠反复跑 `terminal` lint/类型检查，慢且容易漏。Hermes 的 LSP 集成（`agent/lsp/`，11 个文件）把这套「编辑器级的诊断」直接接进 Agent：Agent 改完一个文件，立刻在工具结果里看到「第 42 行：找不到名字 'foo'」这样的语义错误。但 LSP 怎么知道 Agent 改了哪个文件、又在什么时候介入？
+
+**集成点是文件写入之后，而非对话循环里**。当 Agent 调用 `write_file` 或 `patch` 时，`tools/file_operations.py` 在写入前后各跑一次 LSP：写入前调 `_snapshot_lsp_baseline`，把当前文件的全部 LSP 诊断记为「基线」；写入后调 `get_diagnostics_sync` 取新诊断，新旧两份做差，只把**本次编辑新引入的**诊断并进工具输出的 `lsp_diagnostics` 字段。这意味着 Agent 不需要主动「去查错误」——它改完代码，错误自己浮出来。有个前提：**只在语法检查通过时才请求 LSP**（`lint_result.success or skipped`）——文件本身语法就崩的时候不查，免得语法错和语义错两层噪音叠在一起。
+
+**核心是 `LSPService`（`agent/lsp/manager.py:138`），一个进程级单例**，按需启动并复用语言服务器进程。`agent/lsp/servers.py` 的 `SERVERS` 列表注册了 25 种语言服务器（pyright、gopls、rust-analyzer、typescript-language-server、clangd 等），同一 `(服务器, 工作区)` 对的后续请求直接复用已启动的进程。诊断由 `agent/lsp/reporter.py` 格式化——默认**只报 ERROR 级**（`DEFAULT_SEVERITIES = frozenset({1})`，`reporter.py:16`，避免 warning/hint 刷屏）、单文件最多 20 条（`MAX_PER_FILE`，`reporter.py:18`）。
+
+一个不起眼但关键的设计细节：**行号偏移处理**（`agent/lsp/range_shift.py:33 build_line_shift`）。编辑插入/删除几行后，文件后半部分所有诊断的行号都会移位——如果不处理，「原本就存在的错误」会因为行号变了而被当成「本次新引入的」，给 Agent 一堆假噪音。`build_line_shift` 用 `difflib` 对改动前后的文本建一个行号映射，把基线诊断的行号平移到改动后的位置再做差，确保只有真·新错误被报出来。
+
+失败时有多道降级保障，确保 LSP 任何一环出问题都不波及 `write_file` 本身：
+
+- **作用域限制**：只在 git 工作区内运行，避免在无关目录启动守护进程；且**只在本地后端激活**——Docker/Modal/SSH/Daytona 等远程沙箱下完全跳过（语言服务器进程够不到沙箱里的文件，`_lsp_local_only`，`file_operations.py:1342`），文件照写但没有诊断。
+- **broken-set**：启动超时或崩溃的服务器记入破损集合，后续请求直接跳过、不再重复等待超时。
+- **隔离安装**：二进制缺失时按 `install_strategy` 自动装到 `<HERMES_HOME>/lsp/bin`（不污染系统 PATH），装不上就静默跳过。
+
+可配置性在 `config.yaml` 的 `lsp:` 段（`enabled`、`wait_mode`、`install_strategy`、以及按语言 `servers:` 覆盖二进制路径/初始化选项）。
+
+> 📖 **延伸阅读**：[LSP 集成](https://hermes-agent.nousresearch.com/docs/user-guide/features/lsp)
+
 ### Trajectory：从运行时到训练数据
 
 `agent/trajectory.py`（56 行）是 Agent 核心里最简单也最独立的模块。它在 `run_conversation()` 正常返回后，把完整对话序列追加写入 JSONL（ShareGPT 兼容格式）。它不影响任何核心逻辑，和主流程之间是单向依赖——移除它不破坏任何功能。
