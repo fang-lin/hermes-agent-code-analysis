@@ -351,7 +351,7 @@ gateway/run.py:17767    — _start_cron_ticker，60s 驱动 tick
 - **第 02 章（Agent 核心）**：每个任务跑一个全新的 `AIAgent.run_conversation()`，继承 fallback providers 和凭证池（第 02 章详述）。
 - **第 04 章（技能系统）**：任务可挂技能，运行前注入 SKILL.md 内容；Curator 合并/弃用技能时会自动修复 cron 任务里的技能引用。
 - **第 09 章（Kanban）**：Kanban 的 `scheduled` 状态与 cron 集成，用于卡片的定时触发。
-- **第 12 章（批量运行与 RL）**：cron 是「定时自驱动」的单任务调度；批量运行是「一次性大规模并行」，两者都让 Agent 脱离交互式运行，但场景正交。
+- **第 12 章（批量运行与轨迹生成）**：cron 是「定时自驱动」的单任务调度；批量运行是「一次性大规模并行」，两者都让 Agent 脱离交互式运行，但场景正交。
 
 ---
 
