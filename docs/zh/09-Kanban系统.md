@@ -82,7 +82,7 @@ kanban:
 
 > 📖 **延伸阅读（官方文档）：**
 > - [Kanban 系统](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban)
-> - [多 Agent 协作](https://hermes-agent.nousresearch.com/docs/guides/multi-agent)
+> - [委派模式（多 Agent 协作）](https://hermes-agent.nousresearch.com/docs/guides/delegation-patterns)
 
 ---
 
