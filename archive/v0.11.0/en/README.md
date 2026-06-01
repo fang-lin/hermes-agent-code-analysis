@@ -1,8 +1,8 @@
 # ⚠️ Historical Archive — Not Current Documentation
 
-This directory (`docs/archive/v0.11.0/en/`) is the **v1** hermes-agent source analysis, based on **hermes-agent v0.11.0**.
+This directory (`archive/v0.11.0/en/`) is the **v1** hermes-agent source analysis, based on **hermes-agent v0.11.0**.
 
-**The current documentation is in [`docs/en/`](../../../en/)** (once translated) and [`docs/zh/`](../../../zh/), based on hermes-agent **v0.14.0** (commit `3bace071b`, 2026-05-24), 14 chapters (00–13).
+**The current documentation is in [`docs/en/`](../../../docs/en/)** (once translated) and [`docs/zh/`](../../../docs/zh/), based on hermes-agent **v0.14.0** (commit `3bace071b`, 2026-05-24), 14 chapters (00–13).
 
 ## Why it's kept
 

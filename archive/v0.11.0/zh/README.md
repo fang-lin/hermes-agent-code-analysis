@@ -1,8 +1,8 @@
 # ⚠️ 这是历史档案,不是当前文档
 
-本目录(`docs/archive/v0.11.0/zh/`)是 **v1 版本**的 hermes-agent 源码分析,基于 **hermes-agent v0.11.0**。
+本目录(`archive/v0.11.0/zh/`)是 **v1 版本**的 hermes-agent 源码分析,基于 **hermes-agent v0.11.0**。
 
-**当前正式文档在 [`docs/zh/`](../../../zh/)**,基于 hermes-agent **v0.14.0**(commit `3bace071b`,2026-05-24),共 14 章(00–13)。
+**当前正式文档在 [`docs/zh/`](../../../docs/zh/)**,基于 hermes-agent **v0.14.0**(commit `3bace071b`,2026-05-24),共 14 章(00–13)。
 
 ## 为什么还留着
 
