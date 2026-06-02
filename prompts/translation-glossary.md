@@ -6,6 +6,7 @@
 
 - **翻译前必读**：主线翻译每一篇前先通读本表，确保术语用固定译法。
 - **遇到新术语先登记再用**：翻译中碰到表里没有的关键术语，**先把它加进本表**（连同选定的译法和理由），再在译文里使用。像写代码先定义再调用——绝不在没登记的情况下临时决定译法。
+- **技术术语的译法必须回 codebase 验证，不靠中文词面臆造**：凡是「对应某个 hermes 概念/机制」的术语（如 tool call、context compression、daemon thread、approval），登记前先 `grep` 源码和官方文档，用 hermes **实际高频使用的那个词**，并在「说明」列写明依据（如「源码 tool_call 195 次 / tool_use 29 次」）。中文同一个词可能对应源码里两个不同概念（如「审批」= approval 危险命令审批 / authorization 用户授权），必须拆开。这是本表「可查、可复现」的根基。
 - **审核依据**：翻译审核 Agent 逐条对照本表检查译文，表里每个词在译文中必须用指定译法。这一项不靠语感，靠查表，所以结论可复现。
 - **改动留痕**：本表纳入 git，任何术语译法的变更都通过 commit 记录，便于回溯「为什么这个词这么译」。
 
@@ -32,7 +33,8 @@
 | 钩子 | hook | |
 | 网关 | gateway | 小写（除句首）；指 `gateway/` 模块 |
 | 插件 | plugin | |
-| 审批 | approval | 危险命令审批用 approval，不用 authorization |
+| 审批（危险命令） | approval | 危险命令审批：`approval_callback`/`approval_mode`。**与下面的「用户授权」是两个概念** |
+| 用户授权（谁能跟 bot 对话） | user authorization | gateway 层：`_is_user_authorized`、allowlist/DM pairing。**不要和 approval 混译** |
 | 凭证池 | credential pool | |
 | 轨迹 | trajectory | 训练数据语境 |
 | 看板 | Kanban | 首字母大写 |
@@ -52,8 +54,8 @@
 | 沙箱 | sandbox | |
 | 会话 | session | |
 | 会话存储 | session storage | |
-| 全文搜索 | full-text search | |
-| 原子写入 | atomic write | |
+| 原子写入 | atomic write | 泛指概念用 atomic write；具体函数名 `atomic_json_write`/`atomic_yaml_write`/`atomic_replace`/`atomic_roundtrip_yaml_update` 是标识符，原样保留（无 `atomic_write` 这个函数） |
+| 全文搜索 | full-text search | 叙述用 full-text search；`FTS5`/`messages_fts`/`search_messages` 是标识符，原样保留 |
 | 声明式列协调 | declarative column reconciliation | schema 演化语境 |
 | 车队效应 | convoy effect | SQLite 并发写语境 |
 | 供应链硬化 | supply-chain hardening | |
