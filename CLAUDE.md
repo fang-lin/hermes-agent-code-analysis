@@ -64,12 +64,12 @@
 
 ```
 1. 主线 (opus) 读源码写草稿（读 v1 对应章节作为深度基准）
-2. 深度审核 Agent (sonnet) — 读取 prompts/depth-review.md（最先跑，审草稿）
+2. 深度审核 Agent (sonnet) — 用 subagent_type: depth-reviewer 启动（最先跑，审草稿）
 3. 主线 (opus) 补充深度缺失
-4. 文学性审核 Agent (sonnet) — 读取 prompts/literary-review.md（审深度补充后的草稿）
+4. 文学性审核 Agent (sonnet) — 用 subagent_type: literary-reviewer 启动（审深度补充后的草稿）
 5. 主线 (opus) 采纳文学性建议，写入正式文档
-6. 事实审核 Agent (sonnet) — 读取 prompts/factual-review.md（最后跑，审最终版本）
-   注意：启动时只传模板路径 + 文档路径 + 源码路径，不要内联具体验证项
+6. 事实审核 Agent (sonnet) — 用 subagent_type: factual-reviewer 启动（最后跑，审最终版本）
+   注意：系统提示已锁在 agent 文件，不读取手册、不内联验证项；只传文档路径 + 源码路径
 7. 主线 (opus) 二次验证 ⚠️/❌，修正错误
 8. 更新 docs/zh/98-审核报告汇总.md + 工作日志
 ```
@@ -82,28 +82,28 @@
 
 | 用途 | subagent_type | 系统提示来源（真相源） |
 |------|---------------|----------------------|
-| 深度审核 | `depth-reviewer` | prompts/depth-review.md |
-| 文学性审核 | `literary-reviewer` | prompts/literary-review.md |
-| 事实审核 | `factual-reviewer` | prompts/factual-review.md |
-| 完整性审核 | `completeness-reviewer` | prompts/completeness-review.md |
-| 翻译审核 | `translation-reviewer` | prompts/translation-review.md |
+| 深度审核 | `depth-reviewer` | `.claude/agents/depth-reviewer.md` |
+| 文学性审核 | `literary-reviewer` | `.claude/agents/literary-reviewer.md` |
+| 事实审核 | `factual-reviewer` | `.claude/agents/factual-reviewer.md` |
+| 完整性审核 | `completeness-reviewer` | `.claude/agents/completeness-reviewer.md` |
+| 翻译审核 | `translation-reviewer` | `.claude/agents/translation-reviewer.md` |
 
 1. **用 `subagent_type: <上表名字>` 启动**——系统提示已锁定在 `.claude/agents/` 文件里，无需也不应在 prompt 里重述审核标准。
-2. **在消息（prompt 参数）里只传"本次具体对象"**：待审文档路径 + 对应源码目录路径（+ 翻译审核额外传词库路径）。不要内联列出具体验证项。
-3. **不得临时编写审核指令**——审核标准只在 `.claude/agents/` + `prompts/` 里，主线不得绕过。
-4. **真相源是 `prompts/*.md`**：要改审核标准，改 `prompts/` 后**同步更新对应 `.claude/agents/` 文件的 body**（两者内容须一致；agents 文件多了 frontmatter + 调用约定头）。
+2. **在消息（prompt 参数）里只传"本次具体对象"**：待审文档路径 + 对应源码目录路径（+ 翻译审核额外传 `docs/TRANSLATION_GLOSSARY.md` 词库路径）。不要内联列出具体验证项。
+3. **不得临时编写审核指令**——审核标准只在 `.claude/agents/` 里，主线不得绕过、不得内联重写，也不得用 `general-purpose` + 自写 prompt 顶替命名 agent。
+4. **真相源就是 `.claude/agents/*.md`**：要改审核标准，直接改对应 agent 文件的 body，无需再同步任何副本（旧的 `prompts/` 镜像已废除）。
 5. **新建/改 agent 文件后当前 session 不即时生效**——磁盘新增的 subagent 需重启 session 或用 `/agents` 创建才被识别。
 
 > 注：`.claude/agents/` 已纳入 git（团队共享审核 agent 定义）；`.claude/` 下的 commands/settings.local 仍 ignore。
 
-### 事实审核 Agent 五维度（详见 prompts/factual-review.md）：
+### 事实审核 Agent 五维度（详见 `.claude/agents/factual-reviewer.md`）：
 - 事实准确性（必须贴代码片段举证）
 - 完整性（9 问覆盖）
 - 一致性（跨章节）
 - 举例准确性
 - 图表覆盖
 
-### 文学性审核 Agent 五维度（详见 prompts/literary-review.md）：
+### 文学性审核 Agent 五维度（详见 `.claude/agents/literary-reviewer.md`）：
 - 叙事流畅性（必须附改写示例）
 - 概念引入节奏
 - 比喻和类比质量
@@ -117,7 +117,7 @@
 
 ## 完整性审核（阶段性）
 
-在以下节点启动完整性审核 Agent（读取 prompts/completeness-review.md）：
+在以下节点启动完整性审核 Agent（用 subagent_type: completeness-reviewer 启动）：
 - 第一部分（00-01）完成后
 - 第二部分（02-05）完成后
 - 第三部分（06-09）完成后

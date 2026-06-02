@@ -119,7 +119,7 @@ else:
 |------|------|------|
 | 任务没按时跑 | gateway 没在跑（cron 由 gateway 后台线程驱动） | `hermes cron status` 看 gateway 状态；用 `hermes gateway install` 装成服务 |
 | 宕机重启后错过的任务没补跑 | 超出 grace window 被静默快进 | 这是设计行为（见下文 grace window）；想立即跑用 `hermes cron run <id>` |
-| 任务跑了但没收到消息 | 回复以 `[SILENT]` 开头被抑制投递 | 检查 prompt 是否让模型在「没事」时回 `[SILENT]`；失败的任务永远投递不受此影响 |
+| 任务跑了但没收到消息 | 回复中含 `[SILENT]`（子串匹配、不区分大小写）被抑制投递 | 检查 prompt 是否让模型在「没事」时回 `[SILENT]`；失败的任务永远投递不受此影响 |
 | 创建任务报「injection blocked」 | prompt 命中注入/外泄扫描 | 检查是否有不可见 Unicode、`curl` 带密钥、`authorized_keys` 等模式（`cronjob_tools.py`） |
 | 任务说「找不到文件/不知道上下文」 | cron 是全新会话，没有历史记忆 | prompt 必须自包含——把 SSH 地址、命令、判据全写进去 |
 | `croniter` 报错 | 用了 cron 表达式但没装 croniter | `pip install croniter`（v0.9.x 起是核心依赖，`jobs.py:380`） |
@@ -231,9 +231,9 @@ grace = max(120s, min(周期/2, 7200s))
 
 即下限 2 分钟、上限 2 小时、典型取周期的一半。错过时间超过这个窗口的任务被**静默快进**到下一个未来周期，不补跑（`jobs.py` 的 `get_due_jobs` 快进逻辑）。举例：每日任务的周期是 86400s，周期一半远超 2 小时上限，所以容忍窗口是 2 小时——宕机超过 2 小时后重启，今天这次就跳过，等明天。
 
-**③ Wake gate（唤醒门控）**。任务可以挂一个 pre-check 脚本（`script` 字段）。脚本在 agent 运行前先跑，如果它最后一行输出 `{"wakeAgent": false}`，cron 就跳过整个 agent 运行（`cron/scheduler.py` 的 `_parse_wake_gate`）。这是个 `$0` 成本的「要不要花钱」开关——高频轮询任务（每 1-5 分钟）只在状态真变了才唤醒 LLM，否则连模型都不碰。脚本还能通过 `{"wakeAgent": true, "context": {...}}` 把数据传给 agent，省得 agent 再查一遍。
+**③ Wake gate（唤醒门控）**。任务可以挂一个 pre-check 脚本（`script` 字段）。脚本在 agent 运行前先跑，如果它最后一行输出 `{"wakeAgent": false}`，cron 就跳过整个 agent 运行（`cron/scheduler.py` 的 `_parse_wake_gate`）。这是个 `$0` 成本的「要不要花钱」开关——高频轮询任务（每 1-5 分钟）只在状态真变了才唤醒 LLM，否则连模型都不碰。脚本想把数据交给 agent 不必用特殊字段：它的**整段 stdout 都会被注入 prompt**（包进代码块，`scheduler.py:977-994`），直接打印即可。注意 `_parse_wake_gate` 只解析 `wakeAgent` 这一个键并返回布尔值，JSON 里的其他键（如 `context`）不会被特殊处理——数据是靠整段 stdout 传递的，不是靠某个约定字段。
 
-**④ `[SILENT]` 抑制投递**。agent 的最终回复以 `[SILENT]` 开头时（`SILENT_MARKER`，`scheduler.py:132`），输出仍存到本地 `output/` 但**不投递**到聊天。系统提示会告诉模型这个约定：「如果没有值得报告的，回 `[SILENT]`」。这让监控任务可以「健康时闭嘴、出事才喊」。注意：**失败的任务永远投递**，不受 `[SILENT]` 影响——否则坏掉的监控会无声无息。
+**④ `[SILENT]` 抑制投递**。agent 的最终回复中**含有** `[SILENT]` 时（`scheduler.py:1881` 用的是 `SILENT_MARKER in ...strip().upper()`——子串匹配、且因 `.upper()` 不区分大小写；标记 `SILENT_MARKER` 定义在 `scheduler.py:132`），输出仍存到本地 `output/` 但**不投递**到聊天。系统提示给模型的约定是「要么正常汇报，要么只回 `[SILENT]`、别的都不带」（`scheduler.py:1047-1050`），所以正常情况下等价于「整条回复就是 `[SILENT]`」；但代码实为子串匹配，万一回复里任意位置（甚至小写 `[silent]`）出现，也会被抑制。这让监控任务可以「健康时闭嘴、出事才喊」。注意：**失败的任务永远投递**，不受 `[SILENT]` 影响——否则坏掉的监控会无声无息。
 
 ①②是「时间正确性」（不多跑、不在错误的时间批量补跑），③④是「成本/噪音正确性」（不空跑、不刷屏）。
 

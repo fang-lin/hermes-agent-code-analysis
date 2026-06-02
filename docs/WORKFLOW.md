@@ -25,13 +25,13 @@
 ### 翻译阶段
 所有中文章节完成后，翻译英文版（`docs/zh/` → `docs/en/`）。范围：14 篇正文（00–13）；98/99 为过程性元文档，保持中文不译。
 
-质量靠两个外置文件保证一致性（不靠 Agent 记忆）：
-- **`prompts/translation-glossary.md`** — 术语词库，唯一真相源。翻译前必读、遇新术语先登记再用；审核据此逐条查术语一致性。
-- **`prompts/translation-review.md`** — 翻译审核 Agent 工作手册。每篇审核都传同一模板 + 中文原文 + 英文译文 + 词库，固定四个可复现维度（完整性 / 术语 / 技术保真 / 意义）+ 一个建议维度（地道性）。
+质量靠两类外置约定保证一致性（不靠 Agent 记忆）：
+- **`docs/TRANSLATION_GLOSSARY.md`** — 术语词库，唯一真相源。翻译前必读、遇新术语先登记再用；审核据此逐条查术语一致性。
+- **翻译审核 Agent**（`subagent_type: translation-reviewer`，系统提示锁在 `.claude/agents/translation-reviewer.md`）— 每篇审核传中文原文 + 英文译文 + 词库三件，固定四个可复现维度（完整性 / 术语 / 技术保真 / 意义）+ 一个建议维度（地道性）。
 
 单篇翻译流程：
 1. 主线读词库 → 翻译（代码块/Mermaid/`file:line`/数字零改动，只译叙述与图注）→ 新术语登记回词库
-2. 启动翻译审核 Agent（读 `translation-review.md`，传中/英/词库三件）
+2. 用 `subagent_type: translation-reviewer` 启动翻译审核 Agent（不读手册，只传中/英/词库三件路径）
 3. 主线二次验证审核发现（术语/数字/行号类先 grep 再改），修正后定稿
 4. 立即提交
 
@@ -77,9 +77,9 @@
 
 ### 步骤 3：深度审核（sonnet）—— 最先跑
 
-1. 读取 `prompts/depth-review.md`，启动深度审核 Agent
+1. 用 `subagent_type: depth-reviewer` 启动深度审核 Agent（系统提示已锁在 agent 文件，不读取手册）
 2. **审核对象是草稿**——内容不够深就去审文学性和事实，是在给半成品打磨
-3. **启动审核 Agent 时，只传入 prompt 模板文件路径 + 待审核文档路径 + 源码目录路径。不要在内联指令中列出具体要验证的项目**
+3. **消息里只传待审文档路径 + 源码目录路径，不内联列出具体要验证的项目**（审核标准已在 agent 系统提示里）
 4. **审核结论汇总进 `docs/zh/98-审核报告汇总.md`**（统计 + 主要补充项）——98 报告是权威记录，原始 Agent 报告不要求单独落盘
 
 ### 步骤 4：补充深度（主线 opus）
@@ -90,7 +90,7 @@
 
 ### 步骤 5：文学性审核（sonnet）
 
-1. 读取 `prompts/literary-review.md`，启动文学性审核 Agent
+1. 用 `subagent_type: literary-reviewer` 启动文学性审核 Agent（不读取手册，只传文档+源码路径）
 2. **审核对象是深度补充后的草稿**
 3. **审核结论汇总进 `docs/zh/98-审核报告汇总.md`**（建议数 + 采纳的关键改进）
 
@@ -101,7 +101,7 @@
 
 ### 步骤 7：事实审核（sonnet）—— 最后跑
 
-1. 读取 `prompts/factual-review.md`，启动事实审核 Agent
+1. 用 `subagent_type: factual-reviewer` 启动事实审核 Agent（不读取手册）
 2. **审核对象是正式文档（最终版本，包含所有深度补充和文学性修改）**
 3. 只传模板路径 + 文档路径 + 源码路径，不内联具体验证项
 4. **审核结论汇总进 `docs/zh/98-审核报告汇总.md`**（断言数 + ✅⚠️❌ 统计 + 主要修正项表格 + 二次验证结论）
@@ -133,7 +133,7 @@
 | 终审 | 10-13 完成 | 全部 14 章 |
 
 完整性审核流程：
-1. 读取 `prompts/completeness-review.md`，启动完整性审核 Agent
+1. 用 `subagent_type: completeness-reviewer` 启动完整性审核 Agent（不读取手册）
 2. 审核 Agent 检查 5 项全局指标
 3. 主线根据审核结果，回补遗漏内容
 4. 记录到工作日志
@@ -181,6 +181,7 @@ docs/
 ├── CHAPTER_TEMPLATE.md        — 章节模板
 ├── WORKFLOW.md                — 本文件
 ├── PROGRESS.md                — 进度追踪
+├── TRANSLATION_GLOSSARY.md    — 翻译术语词库（中→英），唯一真相源
 ├── zh/
 │   ├── 00-项目全景.md          — 正式文档
 │   ├── 01-基础设施层.md
@@ -193,8 +194,11 @@ docs/
 ├── en/
 │   ├── 00-project-overview.md
 │   └── ...
-prompts/
-├── factual-review.md          — 事实审核 Agent 工作手册
-├── literary-review.md         — 文学性审核 Agent 工作手册
-└── completeness-review.md     — 完整性审核 Agent 工作手册
+
+.claude/agents/                — 审核 Agent 系统提示（真相源，已纳入 git）
+├── depth-reviewer.md          — 用 subagent_type 启动，不读取/不内联
+├── literary-reviewer.md
+├── factual-reviewer.md
+├── completeness-reviewer.md
+└── translation-reviewer.md
 ```

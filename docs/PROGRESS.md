@@ -41,11 +41,11 @@
 
 ## 翻译进度
 
-> 质量维护文件已就绪：`prompts/translation-glossary.md`（术语词库）+ `prompts/translation-review.md`（审核手册）。范围：00–13 共 14 篇；98/99 不译（过程性元文档）。
+> 质量维护文件已就绪：`docs/TRANSLATION_GLOSSARY.md`（术语词库）+ 翻译审核 Agent（`subagent_type: translation-reviewer`，系统提示锁在 `.claude/agents/`）。范围：00–13 共 14 篇；98/99 不译（过程性元文档）。
 
 | 章节 | 状态 |
 |------|------|
-| 质量维护文件 | ✅ 词库 + 审核手册已建 |
+| 质量维护文件 | ✅ 词库（docs/）+ 翻译审核 Agent（.claude/agents/）就绪 |
 | 00 项目全景 | ⬜ 待翻（定调篇） |
 | 01–13 | ⬜ 待翻（00 定调后批量） |
 | 98 / 99 | — 不译（保中文） |
