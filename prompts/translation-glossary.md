@@ -27,7 +27,7 @@
 | 子 Agent | subagent | 一个词，不用 "sub-agent" / "child agent" |
 | 工具 | tool | |
 | 工具集 | toolset | 一个词，不用 "tool set" |
-| 工具调用 | tool call | |
+| 工具调用 | tool call | 用 tool call 不用 tool use——hermes 源码 `tool_call` 195 次/`tool_use` 29 次、官方文档 tool call 216/tool use 24，压倒性用 tool call（虽基于 Anthropic API，但 hermes 自己的命名是 tool call） |
 | 技能 | skill | |
 | 钩子 | hook | |
 | 网关 | gateway | 小写（除句首）；指 `gateway/` 模块 |
@@ -36,14 +36,15 @@
 | 凭证池 | credential pool | |
 | 轨迹 | trajectory | 训练数据语境 |
 | 看板 | Kanban | 首字母大写 |
-| 守护进程 / 后台线程 | daemon thread | 不译成 "guard process"；区分「进程」daemon process |
+| 后台线程 / daemon 线程 | daemon thread | `threading.Thread(daemon=True)`（全仓 157 处）：CLI 的 Agent 调用、MCP 事件循环、技能 review、缓存清理等。**不译成 daemon process** |
+| 守护进程 | daemon process / daemon | 独立 OS 进程：`hermes kanban daemon`、systemd service（`hermes-kanban-dispatcher.service`）；02 章 LSP「避免启动守护进程」也指进程。**与 daemon thread 是两回事** |
 | 派发器 | Dispatcher | Kanban 语境，首字母大写 |
 | 运行模式 | run mode | |
 | 交互模式 | interactive mode | |
 | 单查询模式 | single-query mode | |
 | 机器可读模式 | machine-readable mode | `--quiet` 那种 |
-| 流式 / 流式投递 | streaming / stream delivery | |
-| 上下文压缩 | context compression | |
+| 流式 / 流式投递 | streaming / streaming delivery | streaming delivery 比 stream delivery 顺口 |
+| 上下文压缩 | context compression | 用 compression 不用 compaction——hermes 源码 compress 653 次/compaction 21 次、官方文档 compression 206/compaction 15，压倒性用 compression |
 | 提示缓存 | prompt caching | 保留英文 prompt caching 亦可，全程统一 |
 | 回退链 / Fallback | fallback chain | |
 | 重试与退避 | retry and backoff | |
@@ -73,7 +74,7 @@
 | 延伸阅读（官方文档） | Further Reading (Official Docs) | |
 | 本章定位 | Scope | 定位块小标题 |
 | 失败模式 | failure mode | 9 问之一 |
-| 降级 | degrade / fall back | |
+| 降级 | degrade / graceful degradation | 服务质量下降。**不用 fall back**——那套词留给「回退」，避免与 fallback chain 串味（降级≠回退：降级是质量下降，回退是切到备用路径） |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
@@ -85,7 +86,7 @@
 | 03 工具系统 | 03-tool-system.md | Tool System |
 | 04 技能系统 | 04-skill-system.md | Skill System |
 | 05 网关层 | 05-gateway.md | Gateway Layer |
-| 06 协议适配层 | 06-protocols.md | Protocol Adapters |
+| 06 协议适配层 | 06-protocols.md | Protocol Adaptation Layer |
 | 07 插件框架 | 07-plugin-framework.md | Plugin Framework |
 | 08 内置插件 | 08-builtin-plugins.md | Built-in Plugins |
 | 09 Kanban 系统 | 09-kanban.md | Kanban System |
