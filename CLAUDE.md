@@ -77,9 +77,24 @@
 ## 审核 Agent 规则
 
 ### 启动审核 Agent 时必须做的事：
-1. **读取对应的 prompt 模板文件**（prompts/factual-review.md 或 prompts/literary-review.md），将内容作为 Agent 的 prompt
-2. **同时传入待审核的文档内容**和对应的源码文件路径
-3. **不得临时编写审核指令**，必须使用模板文件
+
+**优先用 `.claude/agents/` 里定义的命名 agent**（系统提示被文件锁定，主线无法忘传或临时改写）：
+
+| 用途 | subagent_type | 系统提示来源（真相源） |
+|------|---------------|----------------------|
+| 深度审核 | `depth-reviewer` | prompts/depth-review.md |
+| 文学性审核 | `literary-reviewer` | prompts/literary-review.md |
+| 事实审核 | `factual-reviewer` | prompts/factual-review.md |
+| 完整性审核 | `completeness-reviewer` | prompts/completeness-review.md |
+| 翻译审核 | `translation-reviewer` | prompts/translation-review.md |
+
+1. **用 `subagent_type: <上表名字>` 启动**——系统提示已锁定在 `.claude/agents/` 文件里，无需也不应在 prompt 里重述审核标准。
+2. **在消息（prompt 参数）里只传"本次具体对象"**：待审文档路径 + 对应源码目录路径（+ 翻译审核额外传词库路径）。不要内联列出具体验证项。
+3. **不得临时编写审核指令**——审核标准只在 `.claude/agents/` + `prompts/` 里，主线不得绕过。
+4. **真相源是 `prompts/*.md`**：要改审核标准，改 `prompts/` 后**同步更新对应 `.claude/agents/` 文件的 body**（两者内容须一致；agents 文件多了 frontmatter + 调用约定头）。
+5. **新建/改 agent 文件后当前 session 不即时生效**——磁盘新增的 subagent 需重启 session 或用 `/agents` 创建才被识别。
+
+> 注：`.claude/agents/` 已纳入 git（团队共享审核 agent 定义）；`.claude/` 下的 commands/settings.local 仍 ignore。
 
 ### 事实审核 Agent 五维度（详见 prompts/factual-review.md）：
 - 事实准确性（必须贴代码片段举证）

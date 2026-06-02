@@ -1,5 +1,7 @@
 hermes-agent/
 .envrc
 .idea
-.claude/
+# .claude：个人配置(commands/settings.local)不入库，但团队共享的审核 agent 定义入库
+.claude/*
+!.claude/agents/
 .antigravitycli/
