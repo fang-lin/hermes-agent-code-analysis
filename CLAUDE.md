@@ -2,9 +2,9 @@
 
 ## 项目概况
 
-本项目分析 NousResearch/hermes-agent 源码，产出一套 14 章的中英双语文档。文档定位：**既能深度理解源码架构，又能直接指导使用**。源码在 `hermes-agent/` 子目录（git-ignored）。
+本项目分析 NousResearch/hermes-agent 源码，产出一套 15 章的中英双语文档。文档定位：**既能深度理解源码架构，又能直接指导使用**。源码在 `hermes-agent/` 子目录（git-ignored）。
 
-## 文档结构（14 章）
+## 文档结构（15 章）
 
 ```
 第一部分：认识系统
@@ -30,6 +30,11 @@
 第五部分：运维与工程
   12 — 批量运行与轨迹生成（原"批量运行与 RL"；RL 训练环境已移出 v0.14.0 主仓）
   13 — 工程实践
+
+第六部分：桌面客户端（v0.18.2 新增）
+  14 — 桌面应用（apps/desktop、bootstrap-installer、shared；架构层面分析：
+       Electron 双进程、bootstrap 安装器、JSON-RPC 对接契约、功能模块地图，
+       不逐个深挖 React 组件。与后端的对接机制归 10 章）
 ```
 
 ## 每章内部结构
