@@ -233,7 +233,7 @@ grace = max(120s, min(周期/2, 7200s))
 
 **③ Wake gate（唤醒门控）**。任务可以挂一个 pre-check 脚本（`script` 字段）。脚本在 agent 运行前先跑，如果它最后一行输出 `{"wakeAgent": false}`，cron 就跳过整个 agent 运行（`cron/scheduler.py` 的 `_parse_wake_gate`（`scheduler.py:2041`））。这是个 `$0` 成本的「要不要花钱」开关——高频轮询任务（每 1-5 分钟）只在状态真变了才唤醒 LLM，否则连模型都不碰。脚本想把数据交给 agent 不必用特殊字段：它的**整段 stdout 都会被注入 prompt**（包进代码块，`scheduler.py:2298` 附近），直接打印即可。注意 `_parse_wake_gate`（`scheduler.py:2041`） 只解析 `wakeAgent` 这一个键并返回布尔值，JSON 里的其他键（如 `context`）不会被特殊处理——数据是靠整段 stdout 传递的，不是靠某个约定字段。
 
-**④ `[SILENT]` 抑制投递**。agent 的最终回复中**含有** `[SILENT]` 时（`scheduler.py:3344` 用的是 `SILENT_MARKER in ...strip().upper()`——子串匹配、且因 `.upper()` 不区分大小写；标记 `SILENT_MARKER` 定义在 `scheduler.py:245`），输出仍存到本地 `output/` 但**不投递**到聊天。系统提示给模型的约定是「要么正常汇报，要么只回 `[SILENT]`、别的都不带」（系统提示约定段），所以正常情况下等价于「整条回复就是 `[SILENT]`」；但代码实为子串匹配，万一回复里任意位置（甚至小写 `[silent]`）出现，也会被抑制。这让监控任务可以「健康时闭嘴、出事才喊」。注意：**失败的任务永远投递**，不受 `[SILENT]` 影响——否则坏掉的监控会无声无息。
+**④ `[SILENT]` 抑制投递**。agent 的最终回复被判定为「沉默信号」时（`_is_cron_silence_response()`，`scheduler.py:257`，调用点 `:3349`；标记 `SILENT_MARKER` 定义在 `:245`），输出仍存到本地 `output/` 但**不投递**到聊天。判定规则是精确的行级匹配而非子串匹配：整条回复恰好是标记、标记独占首行或末行（如 `2 deals filtered\n\n[SILENT]`）、或带方括号的 `[SILENT]` 作同行前缀（文档化写法 `[SILENT] No changes detected`）才算沉默；大小写不敏感，且容忍模型丢括号的 `SILENT`/`NO_REPLY` 变体——但**埋在句子中间的标记按真实内容照常投递**。这套规则是 2026-06-25（`f284d85ef`）重写的：旧实现是 `SILENT_MARKER in ...upper()` 子串匹配，既漏判无括号变体、又把「正文里只是引用了一下 `[SILENT]` 的真实报告」误吞（#51438、#46917）。这让监控任务可以「健康时闭嘴、出事才喊」。注意：**失败的任务永远投递**，不受 `[SILENT]` 影响——否则坏掉的监控会无声无息。
 
 ①②是「时间正确性」（不多跑、不在错误的时间批量补跑），③④是「成本/噪音正确性」（不空跑、不刷屏）。
 
