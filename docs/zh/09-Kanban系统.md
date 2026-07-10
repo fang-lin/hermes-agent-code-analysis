@@ -2,10 +2,10 @@
 
 中文 | [English](../en/09-kanban.md)
 
-> **本章定位**：`hermes_cli/kanban_db.py`（6,579 行）+ `hermes_cli/kanban.py`（2,762 行）+ `tools/kanban_tools.py`（1,297 行）+ `gateway/run.py` 中的 `_kanban_dispatcher_watcher()`（`run.py:5113`）+ `plugins/kanban/`（Dashboard 插件）。总计约 12,723 行核心代码。
-> **关键类**：`Task`（`kanban_db.py:603`）、`Run`（`kanban_db.py:734`）、`dispatch_once()`（`kanban_db.py:4993`）、`_default_spawn()`（`kanban_db.py:5560`）。
+> **本章定位**：`hermes_cli/kanban_db.py`（8,723 行）+ `hermes_cli/kanban.py`（2,845 行）+ `tools/kanban_tools.py`（1,672 行）+ `gateway/kanban_watchers.py`（1,286 行，dispatcher/notifier 所在的 GatewayKanbanWatchersMixin）+ `plugins/kanban/`（Dashboard 插件）。总计约 14,500 行核心代码。
+> **关键类**：`Task`（`kanban_db.py:839`）、`Run`（`kanban_db.py:1005`）、`dispatch_once()`（`kanban_db.py:6932`）、`_default_spawn()`（`kanban_db.py:7662`）。
 
-> **本章基于 hermes-agent commit [`3bace071b`](https://github.com/NousResearch/hermes-agent/commit/3bace071b)（2026-05-24）**
+> **本章基于 hermes-agent v0.18.2（tag [`v2026.7.7.2`](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.7.7.2)，commit `9de9c25f6`，2026-07-07）**
 
 ---
 
@@ -112,11 +112,11 @@ flowchart TD
 
 **图：Kanban 任务状态机（9 种状态）**
 
-任务的 9 种状态（`kanban_db.py:99`）：
+任务的 9 种状态（`kanban_db.py:102`）：
 
 - **triage** — 待规格化，用 `kanban specify` 或 `kanban decompose` 充实后进入 todo
 - **todo** — 有未完成的父任务依赖，`recompute_ready()` 在父任务全部 done 或 archived 时提升到 ready
-- **scheduled** — 时间驱动的等待（对应 Cron 调度，见 11 章）。和 `blocked` 的区别：blocked 等人工干预，scheduled 等时间条件。**不被 `recompute_ready()` 处理**——需要外部触发 `unblock_task()`（`kanban_db.py:3377`）退出
+- **scheduled** — 时间驱动的等待（对应 Cron 调度，见 11 章）。和 `blocked` 的区别：blocked 等人工干预，scheduled 等时间条件。**不被 `recompute_ready()` 处理**——需要外部触发 `unblock_task()`（`kanban_db.py:4827`）退出
 - **ready** — 可调度，Dispatcher 下一轮 tick 会尝试 spawn
 - **running** — Worker 正在执行
 - **blocked** — 分两种（见下方详解）：Worker 主动阻塞（sticky）和 Dispatcher 自动阻塞（非 sticky）
@@ -124,7 +124,7 @@ flowchart TD
 - **done** — 完成
 - **archived** — 归档（scratch workspace 会被清理）
 
-**两种 blocked 的关键区别**（`_has_sticky_block()`，`kanban_db.py:2191`）：
+**两种 blocked 的关键区别**（`_has_sticky_block()`，`kanban_db.py:3243`）：
 
 | 类型 | 触发方式 | 事件类型 | 恢复方式 |
 |------|---------|---------|---------|
@@ -135,9 +135,9 @@ flowchart TD
 
 ### Dispatcher：调度引擎
 
-Dispatcher 是 Kanban 系统的心脏，嵌入在 Gateway 进程内作为 asyncio task 运行（`gateway/run.py:5113`，`_kanban_dispatcher_watcher()`）。每隔 `dispatch_interval_seconds`（默认 60 秒）执行一次 `dispatch_once()`。
+Dispatcher 是 Kanban 系统的心脏，嵌入在 Gateway 进程内作为 asyncio task 运行——v0.17 随 god-file 分解迁入 `gateway/kanban_watchers.py`（`_kanban_dispatcher_watcher()`，`kanban_watchers.py:744`，GatewayKanbanWatchersMixin 的一部分，见 05 章）。每隔 `dispatch_interval_seconds`（默认 60 秒）执行一次 `dispatch_once()`。
 
-**每一轮 dispatch_once()（`kanban_db.py:4993`）做七件事：**
+**每一轮 dispatch_once()（`kanban_db.py:6932`）做七件事：**
 
 1. **收割僵尸子进程**（Unix only，`os.waitpid(-1, WNOHANG)`）——清理已退出但未被 wait 的 Worker 进程
 2. **释放过期 claim**（`release_stale_claims()`）——claim TTL 过期的任务回到 ready
@@ -147,7 +147,7 @@ Dispatcher 是 Kanban 系统的心脏，嵌入在 Gateway 进程内作为 asynci
 6. **提升就绪任务**（`recompute_ready()`）——父任务全部 done 或 archived 时，todo → ready
 7. **调度 ready 任务**——按 `priority DESC, created_at ASC` 排序，对每个 ready 任务执行五步管道：
    - ① **Profile 存在性检查**——assignee 不是真实 Hermes Profile 的任务跳过（`skipped_nonspawnable`），支持外部 Agent（以 Claude Code 为例）通过 `claim_task()` 手动认领
-   - ② **Respawn Guard**（`check_respawn_guard()`，`kanban_db.py:4867`）——三条防抖规则，**任何一条触发都跳过本轮 spawn**，写入 `respawn_guarded` 事件：
+   - ② **Respawn Guard**（`check_respawn_guard()`，`kanban_db.py:6758`）——三条防抖规则，**任何一条触发都跳过本轮 spawn**，写入 `respawn_guarded` 事件：
      - `blocker_auth`：`last_failure_error` 包含 `quota`/`rate_limit`/`429`/`403`/`auth` 等关键词——API 限额/认证问题不应反复重试
      - `recent_success`：1 小时内（`_RESPAWN_GUARD_SUCCESS_WINDOW = 3600`）有 completed run——防止已完成任务被重复 spawn
      - `active_pr`：24 小时内（`_RESPAWN_GUARD_PR_WINDOW = 86400`）comment 中出现 GitHub PR URL——防止重复创建 PR
@@ -157,15 +157,15 @@ Dispatcher 是 Kanban 系统的心脏，嵌入在 Gateway 进程内作为 asynci
 
 第 7 步还有一个 **review lane**：status=review 的任务也会被调度，Dispatcher 为 review Worker 强制加载 `sdlc-review` 技能。
 
-**与 Dispatcher 并行的 Notifier**：Gateway 还运行 `_kanban_notifier_watcher()`（`gateway/run.py:4609`），每 5 秒轮询 `kanban_notify_subs` 表，把任务的 terminal 事件（completed/blocked/crashed 等）通过平台 adapter 推送给原始请求者（以 Telegram/Slack 为例）。这是 human-in-the-loop 闭环的关键——Worker 完成后怎么通知用户？Dashboard 的 WebSocket 用于浏览器，Notifier 用于消息平台。
+**与 Dispatcher 并行的 Notifier**：Gateway 还运行 `_kanban_notifier_watcher()`（`kanban_watchers.py:115`），每 5 秒轮询 `kanban_notify_subs` 表，把任务的 terminal 事件（completed/blocked/crashed 等）通过平台 adapter 推送给原始请求者（以 Telegram/Slack 为例）。这是 human-in-the-loop 闭环的关键——Worker 完成后怎么通知用户？Dashboard 的 WebSocket 用于浏览器，Notifier 用于消息平台。
 
-**Spawn Worker 的具体命令**（`_default_spawn()`，`kanban_db.py:5560`）：
+**Spawn Worker 的具体命令**（`_default_spawn()`，`kanban_db.py:7662`）：
 
 ```bash
 hermes -p <assignee> --accept-hooks --skills kanban-worker [--skills ...] [-m model] chat -q "work kanban task <task_id>"
 ```
 
-Dispatcher 为 Worker 注入完整的环境变量（`kanban_db.py:5600-5641`，`HERMES_HOME` 从 5600 起）：
+Dispatcher 为 Worker 注入完整的环境变量（`kanban_db.py:7702` 起，`HERMES_HOME` 在 :7702）：
 
 | 环境变量 | 用途 |
 |---------|------|
@@ -186,7 +186,7 @@ Dispatcher 为 Worker 注入完整的环境变量（`kanban_db.py:5600-5641`，`
 
 ### Task 数据结构
 
-`Task`（`kanban_db.py:603-731`）是一个 30 个字段的 dataclass。核心字段：
+`Task`（`kanban_db.py:839` 起）是一个 **35 个字段**的 dataclass（AST 数注解字段；v0.14 时 30 个）。核心字段：
 
 | 字段 | 用途 |
 |------|------|
@@ -203,23 +203,40 @@ Dispatcher 为 Worker 注入完整的环境变量（`kanban_db.py:5600-5641`，`
 | `skills` | 强制加载的技能列表 |
 | `model_override` | 单任务 LLM 模型覆盖 |
 
+v0.16-v0.18 新增的字段组（30→35 的增量方向）：
+
+| 新字段 | 用途 |
+|--------|------|
+| `goal_mode` / `goal_max_turns`（`:900-903`） | Worker 以 Ralph 目标循环运行：每轮后 judge 模型评估"目标达成了吗"，未达成就继续（对接 `hermes_cli/goals.py`，第 01 章） |
+| `block_kind` / `block_recurrences`（`:913-917`） | 类型化阻塞 + 解锁循环熔断（见下"两种 blocked"的升级版） |
+| `session_id` | 任务创建自哪个 agent 会话——客户端可按会话渲染专属看板 |
+| `project_id` | 多项目隔离，子任务继承 |
+| `idempotency_key` | 幂等创建——重复提交同 key 不产生重复任务 |
+| `max_retries` | 任务级覆盖调度器全局 `failure_limit` |
+| `result` | 结构化结果载荷 |
+| `workflow_template_id` / `current_step_key` | 模板化工作流的位置指针 |
+
+**类型化阻塞**值得展开（`VALID_BLOCK_KINDS`，`kanban_db.py:125`）：`blocked` 不再是一个笼统状态，而是分四类——`dependency`（等别的任务）、`needs_input`（等人）、`capability`（缺能力，等人）、`transient`（瞬时，可自动重试）。前两类"真阻塞"配了**解锁循环熔断**：cron 反复解锁、Worker 又为同一原因重新阻塞，重复超过 `BLOCK_RECURRENCE_LIMIT = 2`（`:134`）后不再送回 `blocked` 而是升到 `triage`——强制人类决策，打断"解锁↔再阻塞"的死循环（注释明说这是对 cron 无脑解锁的防御）。
+
+另有两处调度语义变化：**per-profile 并发上限**——`dispatch_once()` 新增 `max_in_progress_per_profile`（`:6944`），同一 Profile 超限的任务标记 `skipped_per_profile_capped` 跳过本轮；**workspace 继承**——子任务默认继承父任务的 workspace（`kanban_tools.py:859-898`，v0.14 时默认各开 scratch），协作链上的 Worker 天然共享工作目录。数据库也从 6 张表扩到 **7 张**：新增 `task_attachments` 附件表（建表 `kanban_db.py:1239`）。
+
 ### Run：每次尝试的记录
 
-每次 Worker 被 dispatch 执行一个任务，都会创建一条 `Run` 记录（`kanban_db.py:734-784`）。Run 的 `outcome` 字段记录结果：`completed`（成功）、`blocked`（主动阻塞）、`timed_out`（超时）、`crashed`（崩溃）、`spawn_failed`（spawn 失败）、`reclaimed`（被强制释放）。
+每次 Worker 被 dispatch 执行一个任务，都会创建一条 `Run` 记录（`kanban_db.py:1005` 起，16 个字段）。Run 的 `outcome` 字段记录结果：`completed`（成功）、`blocked`（主动阻塞）、`timed_out`（超时）、`crashed`（崩溃）、`spawn_failed`（spawn 失败）、`reclaimed`（被强制释放）。
 
 Run 的 `summary`（1-3 句话描述做了什么）和 `metadata`（结构化数据，如 `changed_files`、`tests_run`）是**跨 run 上下文传递的核心机制**——下一个 Worker 通过 `build_worker_context()` 看到前次 run 的 summary 和 metadata，能接续工作。
 
-DB 侧函数是 `complete_task()`（`kanban_db.py:2854`；LLM 侧的 `kanban_complete` 工具最终调用它），它的完整执行链不只是"状态变 done"：
+DB 侧函数是 `complete_task()`（`kanban_db.py:3978`；LLM 侧的 `kanban_complete` 工具最终调用它），它的完整执行链不只是"状态变 done"：
 
 1. **created_cards 幻觉验证**——如果 Worker 在 `created_cards` 参数中声明创建了某些 task_id，系统验证这些 ID 真实存在且由该 Worker 创建。虚假引用触发 `HallucinatedCardsError`，**阻止完成**
 2. **DB 事务**（原子 `write_txn`）——status=done、关闭 run
 3. **散文幻觉扫描**——扫描 summary 和 result 中的 `t_<hex>` 引用，不存在的发出 `suspected_hallucinated_references` 事件（advisory，不阻塞）
-4. **重置失败计数 + 提升就绪任务**——`_clear_failure_counter()`（重置 `consecutive_failures`）和 `recompute_ready()`（触发子任务 todo → ready）都在**主事务之外、散文扫描之后**执行（`kanban_db.py:3028`），所以完成本身已经先 durable
+4. **重置失败计数 + 提升就绪任务**——`_clear_failure_counter()`（重置 `consecutive_failures`）和 `recompute_ready()`（触发子任务 todo → ready）都在**主事务之外、散文扫描之后**执行（`_clear_failure_counter` 定义在 `kanban_db.py:6736`，`recompute_ready` 在 `:3281`），所以完成本身已经先 durable
 5. **Workspace 清理**——scratch 类型的工作目录 + tmux session 被清理
 
 ### 数据库：SQLite + WAL
 
-Kanban 数据存储在 SQLite 数据库中，使用 WAL 模式允许 Dispatcher 写入时 Dashboard 仍可读取。`default` board 的数据库在 `~/.hermes/kanban.db`（向后兼容，不在 boards 子目录下），其他 board 在 `~/.hermes/kanban/boards/<slug>/kanban.db`。数据库路径解析优先级（`kanban_db.py:314`）：`HERMES_KANBAN_DB` 环境变量（最高，直接 pin 路径）> `board=` 参数 > `HERMES_KANBAN_BOARD` 环境变量 > `~/.hermes/kanban/current` 文本文件（由 `hermes kanban boards switch` 写入，内容为 board slug；`current_board_path()` 返回 `kanban_home()/"kanban"/"current"`，而 `kanban_home()` 解析到 `<root>`=`~/.hermes`，故只有一层 `kanban`）。
+Kanban 数据存储在 SQLite 数据库中，使用 WAL 模式允许 Dispatcher 写入时 Dashboard 仍可读取。`default` board 的数据库在 `~/.hermes/kanban.db`（向后兼容，不在 boards 子目录下），其他 board 在 `~/.hermes/kanban/boards/<slug>/kanban.db`。数据库路径解析优先级（`current_board_path()` 等解析函数在 `kanban_db.py:404` 附近）：`HERMES_KANBAN_DB` 环境变量（最高，直接 pin 路径）> `board=` 参数 > `HERMES_KANBAN_BOARD` 环境变量 > `~/.hermes/kanban/current` 文本文件（由 `hermes kanban boards switch` 写入，内容为 board slug；`current_board_path()` 返回 `kanban_home()/"kanban"/"current"`，而 `kanban_home()` 解析到 `<root>`=`~/.hermes`，故只有一层 `kanban`）。
 
 6 张表：
 
@@ -234,7 +251,7 @@ Kanban 数据存储在 SQLite 数据库中，使用 WAL 模式允许 Dispatcher 
 
 ### Worker 上下文：build_worker_context()
 
-当 Worker 调用 `kanban_show()` 时，`build_worker_context()`（`kanban_db.py:5790`）构建一个格式化的文本块，包含：
+当 Worker 调用 `kanban_show()` 时，`build_worker_context()`（`kanban_db.py:7898`）构建一个格式化的文本块，包含：
 
 - 任务的 title、body、assignee、status
 - 父任务的最新 summary（Worker 能看到上游任务的结果）
@@ -284,12 +301,12 @@ Review 任务的 Worker 还会额外加载 `sdlc-review` 技能。
 
 ```
 hermes_cli/kanban_db.py       — 核心数据库层（Task/Run/Comment/Event + dispatch_once）（6,579 行）
-hermes_cli/kanban.py          — CLI 命令入口（init/create/list/show/complete/block 等 25+ 子命令）（2,762 行）
+hermes_cli/kanban.py          — CLI 命令入口（init/create/list/show/complete/block 等 25+ 子命令）（2,845 行）
 hermes_cli/kanban_diagnostics.py — 诊断工具（1,058 行）
 hermes_cli/kanban_decompose.py — 任务分解工具（477 行）
 hermes_cli/kanban_swarm.py    — Swarm 编排辅助（279 行）
 hermes_cli/kanban_specify.py  — 任务规格化工具（271 行）
-tools/kanban_tools.py         — Agent 工具接口（9 个工具）（1,297 行）
+tools/kanban_tools.py         — Agent 工具接口（9 个工具）（1,672 行）
 gateway/run.py                — Dispatcher watcher（嵌入在 Gateway 的 asyncio task）
 plugins/kanban/               — Dashboard 插件（Web UI + FastAPI 路由）
 skills/devops/kanban-worker/  — Worker 行为指南技能
@@ -324,4 +341,4 @@ Dispatcher 嵌入 Gateway 进程（`dispatch_in_gateway: true`）而不是独立
 
 ---
 
-*本文基于 hermes-agent v0.14.0 源码分析。所有代码引用均经过独立验证。*
+*本文基于 hermes-agent v0.18.2 源码分析。所有代码引用均经过独立验证。*
