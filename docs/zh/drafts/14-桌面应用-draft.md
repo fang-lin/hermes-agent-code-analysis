@@ -29,11 +29,11 @@
 
 ### 应用里有什么
 
-- **Chat**——主界面。流式回复、思考块折叠、工具调用卡片、审批弹窗（危险命令的 once/session/always/deny 就在这里点）、模型切换器、状态栏（token 用量/费用）
+- **聊天（Chat）**——主界面。流式回复、思考块折叠、工具调用卡片、审批弹窗（危险命令的 once/session/always/deny 就在这里点）、模型切换器、状态栏（token 用量/费用）
 - **会话与 Profile**——会话列表、搜索、分支；Profile 切换。**桌面和 CLI 共享同一个 `~/.hermes`**：桌面里开的会话，CLI 里 `/resume` 能接上，反之亦然
 - **管理面板**——技能（浏览/安装，对接 04 章的多源 Hub）、插件启停（打的是 web_server 的插件管理 API）、cron 任务（可视化蓝图表单，对接 11 章）、gateway/消息平台状态
 - **文件浏览器与内嵌终端**——右侧栏项目树（tui_gateway 的 git_probe/project_tree RPC，第 10 章）；内嵌 xterm.js 终端走 PTY WebSocket
-- **语音**——按住说话（STT）与朗读回复（TTS），复用 10 章的语音管线
+- **语音**——按住说话（STT）与朗读回复（TTS），复用 10 章的语音管线。语音没有独立的前端模块：录音/播放控件嵌在 chat 界面里、开关配置在 settings 里——所以后文的 20 模块地图中不会出现单独的 voice 行
 
 ### 连接远程后端
 
@@ -68,7 +68,7 @@ flowchart TD
     BOOT -->|首次安装| DESK
     subgraph DESK ["apps/desktop"]
         MAIN["Electron 主进程<br/>main.cjs 7,716 行 + 67 个模块化 .cjs"]
-        REND["渲染进程<br/>React 19（695 TS/TSX，141,223 行，20 个功能模块）"]
+        REND["渲染器<br/>React 19（695 TS/TSX，141,223 行，20 个功能模块）"]
         MAIN <-->|IPC| REND
     end
     MAIN -->|"spawn + 管理"| BE["hermes serve<br/>（web_server FastAPI，headless）"]
@@ -83,32 +83,74 @@ flowchart TD
 
 ### 为什么安装器不用 Electron？
 
-初看很怪：为了装一个 Electron 应用，先写一个 Tauri 应用。原因在安装器的特殊约束：它必须是**单文件、体积小、带系统签名**的可执行程序——用户从网页下载的第一个东西，SmartScreen/Gatekeeper 盯得最紧。Tauri 编译出的 Rust 二进制几 MB，Electron 起步就上百 MB。安装器的执行是一个 stage 状态机（`bootstrap.rs` 头部注释即流程）：解析安装脚本来源（dev/缓存/下载，`install_script.rs`）→ 先跑 `install.ps1 -Manifest` 拿 stage 清单发 `manifest` 事件 → 逐 stage 跑 `-Stage NAME -NonInteractive -Json` 发 `stage` 进度事件 → 全过发 `complete`，任一失败或用户取消（mpsc 取消通道）发 `failed`。macOS 上还有一个体验分支（`lib.rs:116-154`）：/Applications 里的 Hermes 图标既是安装器又是启动器——检测到已装好就跳过安装界面直接快速拉起桌面应用。`main.rs` 里连 `windows_subsystem = "windows"` 的位置都有注释记录教训——放错到 lib.rs 会让 Windows 上弹出一个多余的 cmd 黑窗。
+初看很怪：为了装一个 Electron 应用，先写一个 Tauri 应用。原因在安装器的特殊约束：它必须是**单文件、体积小、带系统签名**的可执行程序——用户从网页下载的第一个东西，SmartScreen/Gatekeeper 盯得最紧。Tauri 编译出的 Rust 二进制几 MB，Electron 起步就上百 MB。
+
+安装器的执行是一个 stage 状态机（`bootstrap.rs` 头部注释即流程）：
+
+1. 解析安装脚本来源——dev / 缓存 / 下载三选一（`install_script.rs`）
+2. 先跑 `install.ps1 -Manifest` 拿 stage 清单，向 UI 发 `manifest` 事件
+3. 逐 stage 跑 `-Stage NAME -NonInteractive -Json`，每步发 `stage` 进度事件
+4. 全过发 `complete`；任一失败或用户取消（mpsc 取消通道）发 `failed`
+
+两个平台各有一处特殊行为。macOS 上 /Applications 里的 Hermes 图标是双重身份（`lib.rs:116-154`）：既是安装器又是启动器——检测到已装好就跳过安装界面直接快速拉起桌面应用。Windows 侧连 `windows_subsystem = "windows"` 声明该放在 `main.rs` 都有注释记录教训——放错到 lib.rs 会弹出一个多余的 cmd 黑窗。
 
 ### Electron 主进程：backend 保姆 + 67 个纯函数模块
 
-`main.cjs`（7,716 行）是 Electron 侧的心脏，但这个"上帝文件"的周围是一圈**刻意与 Electron 解耦的纯函数模块**——`backend-command.cjs`、`backend-ready.cjs`、`backend-probes.cjs`、`connection-config.cjs`、`dashboard-token.cjs`、`bootstrap-runner.cjs`（739 行）……每个都自带 `node --test` 的同名测试文件（`*.test.cjs`），注释明说"kept standalone (no require('electron')) so it can be unit-tested"。主进程的可测试逻辑全部外置，`main.cjs` 只做胶水和 IPC 布线——这是对"Electron 主进程难以测试"这个行业通病的直接回答。
+安装器的活到这里就结束了——它拉起的完整桌面应用，此后启动、认证、更新、卸载的整条生命周期都归 Electron 主进程管。`main.cjs`（7,716 行）是这条生命周期的心脏，但这个"上帝文件"的周围是一圈**刻意与 Electron 解耦的纯函数模块**——`backend-command.cjs`、`backend-ready.cjs`、`backend-probes.cjs`、`connection-config.cjs`、`dashboard-token.cjs`、`bootstrap-runner.cjs`（739 行）……这 67 个模块（连同 `main.cjs` 本身共 68 个 .cjs，即页首元数据所指）每个都自带 `node --test` 的同名测试文件（`*.test.cjs`），注释明说"kept standalone (no require('electron')) so it can be unit-tested"。主进程的可测试逻辑全部外置，`main.cjs` 只做胶水和 IPC 布线——这是对"Electron 主进程难以测试"这个行业通病的直接回答。
 
 主进程对后端的管理是一条完整的生命周期：
 
-0. **先决定拉起哪个 hermes**（`resolveHermesBackend()`，`main.cjs:2985-3126`）——六层判定树，按序命中即止：`HERMES_DESKTOP_HERMES_ROOT` 环境变量覆盖 → 开发者源码树 → bootstrap 完成标记指向的托管安装（`ACTIVE_HERMES_ROOT`）→ PATH 上已有的 `hermes`（要过 `--version` 冒烟测试，防"半卸载的 pip 安装"假阳性，`backend-probes.cjs`）→ 系统 Python 且 `hermes_cli` 可导入 → 都不行返回 `bootstrap-needed` 哨兵、转交安装流程。"桌面到底在跑哪个 hermes"的答案只在这里
-1. **拉起**（`backend-command.cjs`）：spawn `hermes serve --host 127.0.0.1 --port 0`——`--port 0` 让 OS 分配随机端口。有一段防"升级半途变砖"的兼容逻辑：`serve` 是较新的子命令（注册于 `hermes_cli/subcommands/dashboard.py:137`），如果解析到的运行时还不认识它，就静态探测其源码后回退到等价的 `dashboard --no-open`。拉起前还有两道闸：`waitForUpdateToFinish()`（`main.cjs:1264`，#50238）——应用刚被更新器重启时不能立刻锁住正在被操作的 venv；**失败闩锁**（`startHermes()` 的 `bootstrapFailure`/`backendStartFailure`）——起过一次失败就重抛同一个错误，防止渲染器重试把用户拖进反复安装的循环
+0. **先决定拉起哪个 hermes**（`resolveHermesBackend()`，`main.cjs:2985-3126`）——六层判定树，按序命中即止：
+   1. `HERMES_DESKTOP_HERMES_ROOT` 环境变量覆盖
+   2. 开发者源码树
+   3. bootstrap 装好的托管安装——判据是托管目录（`ACTIVE_HERMES_ROOT`，即 `~/.hermes/hermes-agent`）里有安装完成时写下的 `.hermes-bootstrap-complete` 标记文件（`main.cjs:365`）
+   4. PATH 上已有的 `hermes`——要过 `--version` 冒烟测试，防"半卸载的 pip 安装"假阳性（`backend-probes.cjs`）
+   5. 系统 Python 且 `hermes_cli` 可导入
+   6. 都不行——返回 `bootstrap-needed` 哨兵，转交安装流程
+
+   "桌面到底在跑哪个 hermes"的答案只在这里
+1. **拉起**（`backend-command.cjs`）：spawn `hermes serve --host 127.0.0.1 --port 0`——`--port 0` 让 OS 分配随机端口。有一段防"升级半途变砖"的兼容逻辑：`serve` 是较新的子命令（注册于 `hermes_cli/subcommands/dashboard.py:137`），如果解析到的运行时还不认识它，就静态探测其源码后回退到等价的 `dashboard --no-open`。拉起前有两道闸：
+   - `waitForUpdateToFinish()`（`main.cjs:1264`，#50238）——应用刚被更新器重启时不能立刻锁住正在被更新器操作的 venv
+   - **失败闩锁**（`startHermes()` 的 `bootstrapFailure`/`backendStartFailure`）——起过一次失败就重抛同一个错误，防止渲染器重试把用户拖进反复安装的循环
 2. **等就绪**（`backend-ready.cjs`）：后端起来后向 stdout 喊一行 `HERMES_BACKEND_READY port=<N>`（旧版喊 `HERMES_DASHBOARD_READY`，两种都认；另有 ready-file 轮询作为第二条检测路径）。默认超时 **90 秒**（`DEFAULT_PORT_ANNOUNCE_TIMEOUT_MS`，`:16`，下限 45 秒，可用 `HERMES_DESKTOP_PORT_ANNOUNCE_TIMEOUT_MS` 覆盖）——冷安装要编译整条 import 链、Windows Defender 逐个扫新 .pyc，pre-bind 开销 30-60 秒是实测常态
 3. **认证**（`dashboard-token.cjs`）：拿 web_server 的 ephemeral session token（第 10 章的安全模型）。这里藏着一个孤儿检测：如果端口上服务的 token 和自己下发的不一致**且**子进程已死，判定端口被外来进程占用，拒绝其 token 并报 `"...refusing its session token"`（`:82-86`）——不会静默连上一个来路不明的后端
 4. **收尾**（`desktop-uninstall.cjs`）：卸载走**分离的清理脚本**（运行中的 exe/venv 在 macOS/Windows 上是锁定的，脚本先等桌面进程退出，POSIX 最多约 30 秒、Windows rmdir 重试 10 次）
+
+把 0-3 步连起来，就是每次点开桌面图标后主进程和后端的对话：
+
+```mermaid
+sequenceDiagram
+    participant M as 主进程
+    participant B as hermes serve
+    M->>M: resolveHermesBackend() 六层判定
+    M->>M: waitForUpdateToFinish()（有更新在跑就先等）
+    M->>B: spawn --port 0
+    B-->>M: stdout "HERMES_BACKEND_READY port=N"（默认限时 90 秒）
+    M->>B: 请求 ephemeral session token
+    B-->>M: token（比对下发值，防孤儿进程占端口）
+    M->>M: 就绪，渲染器可连
+```
+
+**图：后端从判定到就绪的启动序列（生命周期 0-3 步）**
 
 **多 Profile 是第二条生命周期**：主 Profile 的后端全程被上面这套管理；切到其他 Profile 时走 `ensureBackend()`/`spawnPoolBackend()`（`main.cjs:5262-5447`）——一个**带 LRU 淘汰的后端进程池**：容量 `POOL_MAX_BACKENDS`（默认 3，`:787`）、空闲 `POOL_IDLE_MS`（默认 10 分钟）后被每 60 秒巡查一次的 idle reaper 回收，渲染器靠 90 秒一续的 keepalive 保活。切一个 Profile ≈ 多一个 Python 进程——"为什么内存/进程数在涨"的答案在这里。
 
 **自更新是双轨的**（本草稿初版漏掉的最大流程，深度审核补齐）：
 
 - **内容更新（不重启应用）**：`checkUpdates()`/`applyUpdates()`（`main.cjs:1905` 起）直接对 `~/.hermes/hermes-agent` 的 git checkout 做增量更新——处理 shallow clone 无 merge-base 时退化为 SHA 比较（#51922）、脏工作树、SSH/HTTPS 远程差异，应用前先释放 venv shim 锁
-- **完整更新（重装桌面本体）**：桌面拉起 `Hermes-Setup --update`（Tauri 侧 `update.rs`，1,267 行）：等旧桌面退出（最多 20 秒）→ `hermes update --yes --gateway`（只更新 Python 侧，刻意不重建 desktop）→ `hermes desktop --build-only` 重建本体 → 拉起新桌面。`UPDATE_RUNNING` 原子标志防 React StrictMode 双挂载触发并发 `git stash` 弄脏工作树；exit code **2** 是"另一个 hermes 进程占着 venv"的专用信号（`UPDATE_EXIT_CONCURRENT`，`update.rs:42`）
+- **完整更新（重装桌面本体）**：桌面拉起 `Hermes-Setup --update`（Tauri 侧 `update.rs`，1,267 行），四步走：
+  1. 等旧桌面退出（最多 20 秒）
+  2. `hermes update --yes --gateway`——只更新 Python 侧，刻意不重建 desktop
+  3. `hermes desktop --build-only` 重建桌面本体
+  4. 拉起新桌面
+
+  两个保护机制：`UPDATE_RUNNING` 原子标志防 React StrictMode 双挂载触发并发 `git stash` 弄脏工作树；exit code **2** 是"另一个 hermes 进程占着 venv"的专用信号（`UPDATE_EXIT_CONCURRENT`，`update.rs:42`）
 
 两轨用 `waitForUpdateToFinish()` 互斥——后端拉起永远等更新先走完。
 
 ### JSON-RPC 契约：@hermes/shared
 
-`apps/shared`（3 个文件，526 行）是桌面和 Web Dashboard 共用的客户端库，核心是 `JsonRpcGatewayClient`（`json-rpc-gateway.ts`）。它定义的 `GatewayEventName` 事件词表就是桌面与后端之间的**全部语言**：
+backend 一旦就绪，桌面和它之间要解决的就只剩一件事——用什么语言对话。`apps/shared`（3 个文件，526 行）定义的正是这套语言：它是桌面和 Web Dashboard 共用的客户端库，核心是 `JsonRpcGatewayClient`（`json-rpc-gateway.ts`），它定义的 `GatewayEventName` 事件词表就是桌面与后端之间的**全部词汇**：
 
 ```
 gateway.ready · session.info
@@ -126,11 +168,13 @@ background.complete · error · skin.changed
 
 **重连不在这层**——`JsonRpcGatewayClient` 只管连接状态机（`idle/connecting/open/closed/error`）和 pending 请求清算；指数退避重连循环住在渲染器 `app/gateway/hooks/use-gateway-boot.ts`：`min(15s, 1s × 2^min(attempt,4))`，连续 `RECONNECT_ESCALATE_AFTER = 6` 次失败（约 45 秒）后升级为显式失败态。OAuth 场景下每次重连前还要重新铸 ticket——ticket 是一次性的。排查"一直转圈"去 use-gateway-boot.ts，不要在 shared 库里找。
 
-`websocket-url.ts` 处理两种远程认证模型的 URL 构造，判别与强制规则在 `connection-config.cjs`（283 行 + 396 行测试）：按远端 `/api/status` 的 `auth_required` 分流——**token 模式**用 `?token=` 直连；**OAuth 模式**每次连接前先 `POST /api/auth/ws-ticket` 铸一张一次性 `?ticket=`（铸票失败必须硬失败，否则会出现"HTTP 探测通过、WS 连不上"的假阳性）。OAuth 会话靠两级 cookie 维持：`hermes_session_at`（Access Token，约 15 分钟）+ `hermes_session_rt`（Refresh Token，24 小时滚动）——活性判断特意只认 RT（`cookiesHaveLiveSession()`），只看 AT 会让用户每 15 分钟被迫重新登录一次。
+`websocket-url.ts` 处理两种远程认证模型的 URL 构造，判别与强制规则在 `connection-config.cjs`（283 行 + 396 行测试）：按远端 `/api/status` 的 `auth_required` 分流——**token 模式**用 `?token=` 直连；**OAuth 模式**每次连接前先 `POST /api/auth/ws-ticket` 铸一张一次性 `?ticket=`。铸票失败必须硬失败——否则会出现"HTTP 探测通过、WS 连不上"的假阳性。
+
+OAuth 会话本身靠两级 cookie 维持：`hermes_session_at`（Access Token，约 15 分钟）+ `hermes_session_rt`（Refresh Token，24 小时滚动）。"还登着吗"的活性判断特意只认 RT（`cookiesHaveLiveSession()`）——AT 每 15 分钟过期是设计常态，靠 RT 静默续期；如果拿 AT 当判据，用户就会每 15 分钟被迫重新登录一次。
 
 ### 20 个功能模块的地图
 
-渲染器的 `src/app/` 按功能域拆成 20 个模块（TS/TSX 行数）：
+这套协议是骨架，渲染器的 `src/app/` 在它上面长出了 20 个功能域模块——地图如下（TS/TSX 行数）：
 
 | 模块 | 行数 | 内容 |
 |------|------|------|
@@ -165,7 +209,7 @@ background.complete · error · skin.changed
 
 #### 主进程逻辑纯函数化
 
-Electron 主进程代码难测试是行业通病（依赖 electron 运行时、涉及窗口/IPC）。desktop 的解法是把所有可纯化的逻辑抽成无 electron 依赖的 .cjs 模块 + node --test 测试（67 个模块文件里测试文件几乎一比一），`main.cjs` 只留胶水。7,716 行的主文件依然庞大，但它的每一块可测逻辑都住在有测试的模块里——和 Python 侧 god-file 分解（第 00 章）异曲同工。
+前文已述其形态（67 个无 electron 依赖的纯函数模块、测试几乎一比一）；作为决策，值得记的是它选的隔离策略。面对"Electron 主进程难测试"这个行业通病，另一条常见路是把主进程包成可依赖注入的类、测试时 mock 掉 electron——desktop 选了物理拆文件：被测逻辑根本不 `require('electron')`，测试就不需要任何 electron 运行时和 mock 基建，`node --test` 裸跑即可。代价是 `main.cjs` 只剩胶水和 IPC 布线也仍有 7,716 行。和 Python 侧 god-file 分解（第 00 章）选的是同一个方向：与其让巨文件可测，不如让可测的部分离开巨文件。
 
 ### 扩展点
 
