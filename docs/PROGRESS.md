@@ -2,7 +2,7 @@
 
 > **每次新对话必须先读本文件。**
 >
-> 基于 hermes-agent commit: `3bace071b`（2026-05-24）
+> 基于 hermes-agent tag `v2026.7.7.2`（v0.18.2，commit `9de9c25f6`，2026-07-07）；v1 历史基准为 `3bace071b`（v0.14.0）
 
 ## 当前状态
 
