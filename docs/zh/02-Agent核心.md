@@ -468,8 +468,15 @@ flowchart TD
 2. **扇出节奏可配**（`fanout`，`moa_loop.py:847-878`）：默认 `per_iteration`——每次工具迭代都重新问参谋（他们能看到新的工具结果）；`user_turn` 则每个用户轮只问一次、后续迭代复用缓存（签名哈希判断）。这是 MoA 成本的主开关：一轮 10 次工具迭代在默认模式下是 10 轮参考扇出
 3. **计费独立**：`_RefAccounting`（`moa_loop.py:30`）给每个参考模型按**它自己的费率**计价——把 advisor 的 token 折进聚合者的用量会"给每个 advisor 算错钱"（注释原话）。`agent/moa_trace.py`（167 行）把每个 advisor 实际看到的完整输入输出存档，供事后审计
 4. **配置**：preset（参考模型列表 + 聚合者 + 采样参数 + fanout）在 config 的 `moa.presets`，`hermes moa` 子命令管理；MoA 在 Provider 层表现为一个虚拟 Provider（`moa://local`，第 01 章 runtime_provider 链的第 1 步）
+5. **失败语义是 fail-open**：某个参考模型超时/报错时**不抛异常中断这一轮**，而是把 `[failed: {exc}]` 当作一条带标签的意见喂给聚合模型（`moa_loop.py:324-329`，注释原话 "Never raises: a failed reference becomes a labelled note"），对应的 `_RefAccounting` 计费清零。所以一个 advisor 挂掉，`/moa` 这轮会**降级继续**而非整体失败——聚合模型知道少了谁的意见
 
 为什么不做成工具？做成工具意味着模型自己决定"何时召集参谋"——但多模型咨询很贵，一次扇出可能烧掉三个模型的 token。把决定权留给用户（斜杠命令/模型选择），把机制做在循环里，成本边界就是清晰的：用户点名才扇出，`fanout` 决定扇出频率。
+
+### 另一条执行路径：Codex App-Server Runtime
+
+MoA 是"在主循环里多问几个模型"，但 Hermes 还有一条更彻底的替代路径——**把整个工具循环整体委托出去**。当模型是 `openai/*` 或 `openai-codex/*` 且本机装了 Codex CLI 并开启对应配置时，`run_conversation()` 不再自己驱动工具循环，而是走 `_run_codex_app_server_turn()`（调用点 `conversation_loop.py:630`，实现 `agent/codex_runtime.py`，930 行）：一整轮对话交给 Codex CLI 自己的 app-server 子进程跑——用它自己的工具循环、沙箱、`apply_patch`，Hermes 只提供会话历史、网关投递、记忆与技能这层外壳，把 Codex 的 `item/started` 等通知翻译回 Hermes 的工具进度事件。
+
+这解释了一件容易误解的事：`AIAgent.run_conversation()` **不是唯一的执行入口**。多数情况下它自己跑工具循环；MoA 模式下它在每次模型调用处扇出参谋；Codex runtime 模式下它把整轮让给外部 app-server。三者是同一个 `run_conversation()` 的三种落地——读源码时若只盯着默认工具循环，会漏掉后两条路径。
 
 ### 子 Agent：横向分拆任务
 
