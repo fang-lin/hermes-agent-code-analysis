@@ -24,16 +24,16 @@
 | 02 — Agent 核心 | ✅ 已完成 🔄 已更新至 v0.18.2 | 2026-07-10 重章双审（depth 4🔴5🟡 全采纳 + factual 1❌2⚠️）；新增 MoA 双路径/turn_context+finalizer/三态凭证/压缩失败闭环/恢复四分叉 |
 | 03 — 工具系统 | ✅ 已完成 🔄 已更新至 v0.18.2 | 2026-07-10 factual 认证审（3❌5⚠️ 修正）；69 工具/DANGEROUS 73/写入审批/威胁模式库/tool_search 渐进披露/后台委托 |
 | 04 — 技能系统 | ✅ 已完成 🔄 已更新至 v0.18.2 | 2026-07-10 factual 认证审（8❌6⚠️ 修正）；72+102 技能索引重列、审查模型路由/DIGEST、Curator prune_builtins、Skills Hub 十源聚合重写 |
-| 05 — 网关层 | ✅ 已完成 🔄 已更新至 v0.18.2 | depth 审核已过（5🔴5🟡 采纳）；factual 待补跑（限额中断） |
-| 06 — 协议适配层 | ✅ 已完成 🔄 已更新至 v0.18.2 | V4A 审批反转/provenance/state.db 索引迁移；factual 待补跑 |
-| 07 — 插件框架 | ✅ 已完成 🔄 已更新至 v0.18.2 | 22 成员/23 钩子/中间件/延迟加载；depth+factual 待补跑 |
-| 08 — 内置插件 | ✅ 已完成 🔄 已更新至 v0.18.2 | 平台大迁移主叙事重写/18 类；depth+factual 待补跑 |
-| 09 — Kanban 系统 | ✅ 已完成 🔄 已更新至 v0.18.2 | Task 35 字段/类型化阻塞熔断/per-profile 上限/7 表；factual 待补跑 |
-| 10 — 交互界面与运行模式 | ✅ 已完成 🔄 已更新至 v0.18.2 | cli.py 锚点重测/web_server 桌面后端成节/tui_gateway 11 文件/STT 六级链；双审待补跑 |
-| 11 — Cron 调度 | ✅ 已完成 🔄 已更新至 v0.18.2 | 扩容六方向（Provider/蓝图/快照/五层并发/心跳/守卫）；factual 待补跑 |
-| 12 — 批量运行与轨迹生成 | ✅ 已完成 🔄 已更新至 v0.18.2 | moa 全分布移除/reasoning 重构/_snap_boundary；factual 待补跑 |
-| 13 — 工程实践 | ✅ 已完成 🔄 已更新至 v0.18.2 | SCHEMA 19/TRUNCATE checkpoint/四路日志/原子写硬化/CI 动态 8 路；双审待补跑 |
-| 14 — 桌面应用 | 🔄 v0.18.2 已转正 | 三件套架构/后端托管/JSON-RPC 契约/20 模块地图；depth+文学已闭环，factual 待跑 |
+| 05 — 网关层 | ✅ 已完成 🔄 v0.18.2 双审闭环 | depth 5🔴5🟡 + factual 3❌3⚠️（SessionResetPolicy 默认 none/fresh-final 默认关/handler 46）全修 |
+| 06 — 协议适配层 | ✅ 已完成 🔄 v0.18.2 factual 闭环 | V4A 审批反转/provenance(v0.17)；factual 10❌4⚠️（工具集 49→29/messages_send 无审批/permissions 未接线）全修 |
+| 07 — 插件框架 | ✅ 已完成 🔄 v0.18.2 双审闭环 | 22 成员/23 钩子/中间件；depth 3🔴3🟡 + factual 2❌5⚠️（3 注册面 v0.15 归属纠正）全修 |
+| 08 — 内置插件 | ✅ 已完成 🔄 v0.18.2 双审闭环 | 平台大迁移/18 类；depth 3🔴5🟡 + factual 8❌3⚠️（版本归属系统性纠偏/teams sink 行为）全修 |
+| 09 — Kanban 系统 | ✅ 已完成 🔄 v0.18.2 factual 闭环 | Task 35 字段/类型化阻塞熔断/per-profile 上限/7 表；factual 11❌7⚠️ 全修 |
+| 10 — 交互界面与运行模式 | ✅ 已完成 🔄 v0.18.2 双审闭环 | depth 3🔴7🟡（三线程打断/goal/PtyBridge 四层）+ factual 21❌6⚠️（行号系统性漂移全重测/HERMES_LOCAL_STT_COMMAND）全修 |
+| 11 — Cron 调度 | ✅ 已完成 🔄 v0.18.2 factual 闭环 | 扩容六方向；factual 8❌8⚠️（代码组织行数/ticker 拆分/script_timeout 3600/profile 字段删除）全修 |
+| 12 — 批量运行与轨迹生成 | ✅ 已完成 🔄 v0.18.2 factual 闭环 | moa 全分布移除/_snap_boundary(v0.17)；factual 11❌（行号漂移/save_trajectories 非 config 键）全修 |
+| 13 — 工程实践 | ✅ 已完成 🔄 v0.18.2 双审闭环 | depth 4🔴3🟡（state.db 自愈/compression_locks/日志异步队列/发布工程）+ factual 6❌6⚠️（测试计数 2017/per-file 归因）全修 |
+| 14 — 桌面应用 | ✅ 已完成 🆕 v0.18.2 全流程闭环 | 三件套/后端托管/JSON-RPC 契约/20 模块地图；draft→depth→literary→factual 4❌3⚠️（终端 IPC/模块 33/自更新轨道）全修 |
 
 ## 完整性审核进度
 
