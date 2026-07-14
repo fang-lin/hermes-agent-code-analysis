@@ -543,7 +543,7 @@ VS Code 里的红波浪线——拼错变量名、类型不匹配、找不到符
 
 `agent/trajectory.py`（56 行）是 Agent 核心里最简单也最独立的模块。它在 `run_conversation()` 正常返回后（现在由 `turn_finalizer.py` 触发），把完整对话序列追加写入 JSONL（ShareGPT 兼容格式）。它不影响任何核心逻辑，和主流程之间是单向依赖——移除它不破坏任何功能。
 
-成功的写入 `trajectory_samples.jsonl`，失败的写入 `failed_trajectories.jsonl`——失败案例对研究者同样有价值，甚至更有价值（"模型在哪里犯错"和"做对了什么"一样重要）。Nous Research 用这些轨迹训练下一代工具调用模型，这是 Hermes "research-ready" 定位的基础设施之一。默认关闭，主要被 `batch_runner.py` 和数据生成流程使用。
+成功的写入 `trajectory_samples.jsonl`，失败的写入 `failed_trajectories.jsonl`——失败案例对研究者同样有价值，甚至更有价值（"模型在哪里犯错"和"做对了什么"一样重要）。Nous Research 用这些轨迹训练下一代工具调用模型，这是 Hermes "research-ready" 定位的基础设施之一。默认关闭。注意 `batch_runner.py` 并不用这套机制（它显式设 `save_trajectories=False`，自己另存一套，见第 12 章）——这套 `agent/trajectory.py` 的简单存储实际只服务交互式 CLI 的 `--save_trajectories` 标志。
 
 ### 辅助模型：侧任务的统一调度器
 
