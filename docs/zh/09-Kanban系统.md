@@ -208,7 +208,7 @@ v0.14.0 之后新增的 8 个字段（27→35，逐版本 diff 实测）：
 
 | 新字段 | 用途 |
 |--------|------|
-| `goal_mode` / `goal_max_turns`（`:900-903`） | Worker 以 Ralph 目标循环运行：每轮后 judge 模型评估"目标达成了吗"，未达成就继续（对接 `hermes_cli/goals.py`，第 01 章） |
+| `goal_mode` / `goal_max_turns`（`:900-903`） | Worker 以 Ralph 目标循环运行：每轮后 judge 模型评估"目标达成了吗"，未达成就继续（对接 `hermes_cli/goals.py`；代码树见第 01 章，`/goal` 裁判判定与 Ctrl+C 自动暂停等机制详见第 10 章） |
 | `block_kind` / `block_recurrences`（`:913-917`） | 类型化阻塞 + 解锁循环熔断（见下） |
 | `session_id` | 任务创建自哪个 agent 会话——客户端可按会话渲染专属看板 |
 | `project_id` | 多项目隔离，子任务继承 |
