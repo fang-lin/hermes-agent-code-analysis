@@ -369,7 +369,7 @@ stateDiagram-v2
 
 **图：单个凭证的三种持久状态转换**
 
-`exhausted → ok` 的冷却时长分三档（`credential_pool.py:113-115`）：401 触发的短冷却 **5 分钟**（单 Key 用户能较快恢复）、429 触发 **1 小时**、其他默认 **1 小时**；Provider 在响应里给了 `reset_at` 时间戳的话以它为准。`STATUS_OK`（`credential_pool.py:57`）和 `STATUS_EXHAUSTED`（`:58`）之外，v0.18 新增了 `STATUS_DEAD`（`:65`）——一组**终态 OAuth 错误**（`token_invalidated`、`token_revoked`、`invalid_grant` 等，`_TERMINAL_AUTH_REASONS`，`:70-77`）标记的凭证永远不会自愈，冷却后重试注定失败，所以被无条件排除出轮转，只有显式重新登录（写侧同步）才能复活；手工添加的 dead 凭证 24 小时后被清理（`:90`）。OAuth token 刷新不是一个独立状态——它在选取凭证时自动触发，刷新期间凭证仍在 `ok` 态；刷新失败则跳过该凭证，但不标记 `exhausted`。
+`exhausted → ok` 的冷却时长分三档（`credential_pool.py:113-115`）：401 触发的短冷却 **5 分钟**（单 Key 用户能较快恢复）、429 触发 **1 小时**、其他默认 **1 小时**；Provider 在响应里给了 `reset_at` 时间戳的话以它为准。`STATUS_OK`（`credential_pool.py:57`）和 `STATUS_EXHAUSTED`（`:58`）之外，v0.16 起有 `STATUS_DEAD`（`:65`）——一组**终态 OAuth 错误**（`token_invalidated`、`token_revoked`、`invalid_grant` 等，`_TERMINAL_AUTH_REASONS`，`:70-77`）标记的凭证永远不会自愈，冷却后重试注定失败，所以被无条件排除出轮转，只有显式重新登录（写侧同步）才能复活；手工添加的 dead 凭证 24 小时后被清理（`:90`）。OAuth token 刷新不是一个独立状态——它在选取凭证时自动触发，刷新期间凭证仍在 `ok` 态；刷新失败则跳过该凭证，但不标记 `exhausted`。
 
 一个常见的误解是 Credential Pool 由 Agent 管理。实际上，**池的创建由 CLI/Gateway 层完成**（`hermes_cli/runtime_provider.py` 调 `load_pool()` 加载并注入，凭证数据的读写在 `hermes_cli/auth.py`），在 Agent 创建之前就准备好，通过 `credential_pool=pool` 参数注入。Agent 只是消费者——它从池中选凭证、标记限流状态、触发 token 刷新，但不负责凭证从哪里来。
 
