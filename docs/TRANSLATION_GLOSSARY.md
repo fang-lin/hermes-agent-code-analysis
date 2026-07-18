@@ -150,6 +150,22 @@
 | 信任级 | trust level / trust tier | builtin > trusted > community |
 | 摘要重放 | digest replay | review 异模型场景 _digest_history |
 | 全量重放 | full replay | review 同模型场景 |
+| 适配器 | adapter | BasePlatformAdapter |
+| 平台注册表 | platform registry | gateway/platform_registry.py |
+| 能力宣告 | capability declaration | 适配器 supports_* 属性 |
+| 草稿流式 | draft streaming | Telegram DM 原生草稿预览 |
+| 编辑节奏 | edit cadence | 流式 edit_message 触发节奏 |
+| dead-target | dead target | DeadTargetRegistry，保留原词 |
+| 静默叙述过滤 | silence-narration filtering | 幻觉"我保持安静"噪声 |
+| 投递路由 | delivery router | Delivery Router |
+| 中继 | relay | Team Gateway relay 子包 |
+| 会话恢复 / 续接 | session recovery / resumption | resume_pending |
+| 优雅关闭 | graceful shutdown | stop() SIGTERM |
+| 熔断器 | circuit breaker | 平台重连（与 Kanban circuit breaker 同词） |
+| 拦截型命令 | intercept command | /stop /new 忙碌路径立即处理 |
+| 规整化 | canonicalize / normalize | WhatsApp JID/LID 规整化 |
+| 消息容器 | message envelope | MessageEvent |
+| 富媒体 | rich media | 图片/语音/视频 |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
