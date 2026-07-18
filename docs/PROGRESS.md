@@ -52,8 +52,17 @@
 | 章节 | 状态 |
 |------|------|
 | 质量维护文件 | ✅ 词库（docs/）+ 翻译审核 Agent（.claude/agents/）就绪 |
-| 00 项目全景 | ⬜ 待翻（定调篇） |
-| 01–14 | ⬜ 待翻（00 定调后批量；14 章为 v0.18.2 新增） |
+| 00 项目全景 | ✅ 已翻 + 审核闭环（定调篇，用户已确认） |
+| 01–05 | ✅ 已翻 + translation-reviewer 审核闭环（近乎逐段 1:1，微修术语一致性） |
+| 06 协议适配层 | ✅ 已翻 + 审核闭环（连带修 ZH 源 messages_send 审批矛盾 183/214） |
+| 07 插件框架 | ✅ 已翻 + 审核闭环（Kanban/Gateway 大小写、security defenses） |
+| 08 内置插件 | ✅ 已翻 + 审核闭环（ZH 源修 会话流→对话流，经 ch02:198 二次验证） |
+| 09 Kanban | ✅ 已翻 + 审核闭环（Mermaid 边标签；看板/board 拆分入词库） |
+| 10 交互界面与运行模式 | ✅ 已翻 + 审核闭环（dual authentication/safety net；kawaii 保留原词） |
+| 11 Cron 调度 | ✅ 已翻 + 审核闭环（daemon thread/liveness-based/Profile 大小写） |
+| 12 批量运行与轨迹生成 | ✅ 已翻 + 审核闭环（降级≠回退、Terminal Backends 对齐 03 章标题） |
+| 13 工程实践 | ✅ 已翻（含全书结语），🔵 translation-reviewer 审核中 |
+| 14 桌面应用 | ✅ 已翻（ZH 源修 67→33 模块，经源码核实），🔵 translation-reviewer 审核中 |
 | 98 / 99 | — 不译（保中文） |
 
 ---
