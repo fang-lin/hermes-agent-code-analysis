@@ -54,6 +54,7 @@ Do not front-load everything. Climb only as far as the problem needs — most ta
   - `reference/debugging.md` — log-file map, diagnostic commands, the silent-failure catalog, symptom→cause→fix by subsystem. → debugging tasks.
   - `reference/extending.md` — step-by-step recipes to add a tool/skill/platform/plugin-hook/provider/backend. → customization / secondary development.
   - `reference/architecture.md` — request path, agent loop, caching invariant, subsystem→source map. → "how does it actually work" / where to look.
+  - `reference/worked-examples.md` — two validated end-to-end traces (a debug case + a customize case) showing the ladder climbing Tier 0→3 to real source. Read this to learn the *pattern*.
   - `scripts/orient.sh [hermes-root]` — prints the installed version + key-file line-count drift vs the pinned anchors, so you know how much to distrust the line numbers. Run this first when working in an unfamiliar checkout.
 - **Tier 2 — the full 15-chapter analysis (fetch on demand).** For the *why* (design rationale, alternatives considered, failure modes) the code alone won't tell you:
   - One chapter (light): `curl -fsSL https://raw.githubusercontent.com/fang-lin/hermes-agent-code-analysis/main/docs/en/NN-slug.md` (Chinese: `docs/zh/…`; en slugs are ASCII).
@@ -123,6 +124,7 @@ These are the non-obvious rules where a plausible-looking change quietly breaks 
 ## Verification discipline (recap) / 验证纪律(重申)
 
 - Pinned to **v0.18.2 / `9de9c25f6`**. Before quoting or editing at a line number, `grep` the symbol in the actual checkout — line numbers drift.
+- **Grep the whole definition, not a capped range.** hermes has multi-thousand-line classes/files; a required member can sit thousands of lines below the first ones (real case: `BasePlatformAdapter`'s 4th `@abstractmethod` is 2,600 lines below the other three). Never trust a hardcoded count or a partial scan — read the full definition, then rely on it. See `reference/worked-examples.md`.
 - A claim about "when a feature appeared" is version-sensitive; confirm against the target checkout's own history if it matters.
 - When unsure, read the relevant chapter (fetch on demand) rather than guessing — the chapters carry the full file:line-anchored reasoning.
 - Calibrate drift fast: run `scripts/orient.sh [hermes-root]` — it prints the installed version and the key-file line-count drift vs the pinned anchors, so you know upfront how much to distrust the line numbers.

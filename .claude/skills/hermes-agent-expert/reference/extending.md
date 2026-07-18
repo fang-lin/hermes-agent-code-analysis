@@ -30,10 +30,10 @@ No code. A skill is a `SKILL.md` (frontmatter + markdown body) that teaches the 
 
 ## 4. A messaging platform / 加消息平台
 Platforms are **plugins** now (since v0.15), not gateway built-ins.
-- **Implement**: the 4 required methods of `BasePlatformAdapter`.
-- **Register**: `ctx.register_platform(...)` inside a plugin under `plugins/platforms/`.
+- **Base class**: `class BasePlatformAdapter(ABC)` — `gateway/platforms/base.py:2253` (a ~3,375-line class). It has **4 `@abstractmethod`** you MUST implement: `connect()`, `disconnect()`, `send()` (clustered ~`:2863-2888`) and **`get_chat_info()` (`:5475`)**. ⚠️ The 4th sits ~2,600 lines below the other three — a capped grep will show only 3 and you'll ship a class that won't instantiate. **Scan the whole class** (`grep -n "@abstractmethod" gateway/platforms/base.py`). Everything else (`send_image`/`edit_message`/`send_draft`/`send_typing`/capability properties) has sensible defaults — override only what your platform supports.
+- **Template**: copy an existing plugin, e.g. `plugins/platforms/telegram/` — `adapter.py` (the `BasePlatformAdapter` subclass) + `plugin.yaml` + a `register(ctx)` that calls `ctx.register_platform(...)`.
 - **Gotchas**: bundled platforms are **deferred-loaded** (import on first use: gateway start / cron delivery / setup) → a missing optional SDK makes it silently drop from the registry (`Deferred load of platform '<name>' failed` in `agent.log`). Don't add platform logic to gateway core.
-- **Source**: `gateway/platform_registry.py`, `plugins/platforms/`. Deep: `docs/en/05-gateway.md`, `08-builtin-plugins.md`.
+- **Source**: `gateway/platforms/base.py` (the ABC), `gateway/platform_registry.py`, `plugins/platforms/<name>/`. Deep: `docs/en/05-gateway.md`, `08-builtin-plugins.md`.
 
 ## 5. A model Provider / 加模型供应商
 - Drop a plugin under `plugins/model-providers/` → it auto-expands `PROVIDER_REGISTRY` (`auth.py:447`).
