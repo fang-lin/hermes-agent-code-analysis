@@ -201,6 +201,19 @@
 | 卫星模块 / 卫星文件 | satellite module / satellite file | 平台插件辅助文件 |
 | 内建军团 | built-in legion | 平台迁移前的内建适配器 |
 | 主战场 | main battleground | 迁移主战场（意译，避免黑话直译） |
+| 编排者 | orchestrator | Kanban 拆分任务的 Agent |
+| 认领 | claim | claim_task() CAS 认领 |
+| 幻觉验证 / 幻觉扫描 | hallucination validation / scan | created_cards 校验、散文 t_<hex> 扫描 |
+| 类型化阻塞 | typed blocking | VALID_BLOCK_KINDS 四种 kind |
+| 解锁循环熔断 | unblock-loop circuit breaker | block_recurrences 达上限升 triage |
+| 多租户 | multi-tenant | HERMES_TENANT 命名空间 |
+| 僵尸 / 僵死 Worker | zombie / stale worker | 无心跳/崩溃 Worker 检测 |
+| 收割（子进程） | reap | os.waitpid 收割僵尸子进程 |
+| 交接 | hand off | Worker 交出结果 |
+| 目标循环 / Ralph 循环 | goal loop / Ralph loop | goal_mode Worker |
+| 抖动防抖（respawn） | respawn guard | check_respawn_guard 四规则 |
+| 假阻塞 / 真阻塞 | pseudo-block / real block | dependency vs needs_input 等 |
+| 工作区 | workspace | scratch/dir/worktree |
 | 卡死循环 / stuck loop | stuck loop | `_STUCK_LOOP_THRESHOLD`，保留原词 |
 | 洪泛控制 / Flood control | flood control | stream_consumer 限速降级，源码原词 |
 | Deliverable Mode | Deliverable Mode | 官方特性名，MEDIA: 标签变附件，专名大写保留 |
