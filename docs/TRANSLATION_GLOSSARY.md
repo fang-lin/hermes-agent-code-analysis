@@ -77,6 +77,19 @@
 | 本章定位 | Scope | 定位块小标题 |
 | 失败模式 | failure mode | 9 问之一 |
 | 降级 | degrade / graceful degradation | 服务质量下降。**不用 fall back**——那套词留给「回退」，避免与 fallback chain 串味（降级≠回退：降级是质量下降，回退是切到备用路径） |
+| 自改进 | self-improving | 项目定位词，源 `pyproject.toml:11` "The self-improving AI agent"，原样用 |
+| 智能体框架 | agent framework | |
+| 桌面应用 / 桌面客户端 | desktop app / desktop client | `apps/desktop`，Electron；与章节标题 Desktop App 一致 |
+| 平台大迁移 / 平台迁移 | platform migration | v0.15-v0.18 主流平台从 gateway 内建搬进 `plugins/platforms/` |
+| 上帝文件 | god-file | 源码 commit 自称 "god-file decomposition campaign"，保留 god-file 连字符写法 |
+| 上帝文件分解 | god-file decomposition | 同上，用源码原短语 |
+| 延迟加载 / 延迟加载器 | deferred loading / deferred loader | 平台插件语境，源码 `LoadedPlugin.deferred`/`platform_registry` 用 deferred（非 lazy——lazy 留给 Lazy Import 依赖懒加载） |
+| 记忆双注入 | memory dual-injection | 00 章：内置快照入系统提示 + 外部检索入用户消息 |
+| 中断传播 | interrupt propagation | `agent.interrupt()` 多层级递归 |
+| 破题段 / 破题 | opening | 文档开篇段，按英文习惯处理，不直译 |
+| 消息网关 | message gateway | 泛指时 message gateway；指模块用 gateway |
+| 虚拟 Provider | virtual provider | MoA 语境，`moa://local` |
+| 多模型聚合 / MoA | Mixture of Agents (MoA) | 首次出现给全称 + 缩写，之后用 MoA；源码/官方文档一致 |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
@@ -96,5 +109,6 @@
 | 11 Cron 调度 | 11-cron-scheduling.md | Cron Scheduling |
 | 12 批量运行与轨迹生成 | 12-batch-and-trajectories.md | Batch Running & Trajectory Generation |
 | 13 工程实践 | 13-engineering-practices.md | Engineering Practices |
+| 14 桌面应用 | 14-desktop-app.md | Desktop App |
 
 > 章节标题里那些「问题式」的副标题（如「让 Agent 在你不说话时也能干活」），按英文写作习惯意译，保留同样的「问题驱动」张力，不逐字直译。具体译法翻到该章时定，并登记回本表。
