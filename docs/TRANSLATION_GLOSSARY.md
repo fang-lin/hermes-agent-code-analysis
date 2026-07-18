@@ -104,6 +104,23 @@
 | 配置项 | config key / setting | `DEFAULT_CONFIG` 的键 |
 | 优先级链 | precedence chain | provider 解析等多级链路 |
 | 深度合并 | deep merge | `_deep_merge()` 配置合并 |
+| 对话协调器 | conversation orchestrator | AIAgent 的定位 |
+| 参考模型 / 参谋 | reference model / advisor | MoA，源码 `_REFERENCE_SYSTEM_PROMPT` 用 advisor |
+| 聚合模型 / 聚合器 | aggregator | MoA，源码 "the aggregator is the acting model" |
+| 扇出 | fan-out | MoA 参考扇出（fan out to reference models） |
+| 预飞压缩 | pre-flight compression | 进循环前的压缩闸门 |
+| 发前压力复查 | pre-call pressure recheck | 每次 API 调用前的第二道压缩闸门 |
+| 序幕 / 收尾 | prologue / epilogue | turn_context 序幕 / turn_finalizer 收尾 |
+| 心跳 | heartbeat | 子 Agent 活动信号 |
+| 计费 / 账单 | billing | credits_tracker/billing_view |
+| 可观测性 | observability | display 实时 / insights 事后 |
+| 退款 | refund | IterationBudget.refund() |
+| 预算 | budget | IterationBudget |
+| 抖动 | jitter | 带抖动的指数退避 |
+| 崩溃恢复 | crash recovery | turn_context 持久化 |
+| 记忆预取 | memory prefetch | 外部 memory provider 检索 |
+| 消毒 / 修复 | sanitize / repair | `_sanitize_api_messages` |
+| entitlement 检测 | entitlement check | 403 检测：缺订阅 vs token 过期，保留 entitlement 原词 |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
