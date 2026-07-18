@@ -108,7 +108,7 @@ flowchart TD
     SCHED -->|"unblock_task#40;#41;<br/>parents not cleared→todo"| READY
     RUNNING -->|"external trigger<br/>#40;direct DB/automation#41;"| REVIEW["review<br/>review pipeline"]
     REVIEW -->|"claim_review_task#40;#41;<br/>review Agent claims"| RUNNING
-    RUNNING -->|"review passes, merge"| DONE
+    RUNNING -->|"review passes → merge"| DONE
 ```
 
 **Figure: The Kanban task state machine (9 states)**

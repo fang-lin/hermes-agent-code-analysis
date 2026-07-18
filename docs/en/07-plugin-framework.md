@@ -144,7 +144,7 @@ Note the distinction between the two kinds of command registration: `register_co
 
 `register_tool()` uses the same `registry.register()` interface as built-in tools — to the model, plugin tools and built-in tools are indistinguishable. Take the Spotify plugin as an example: it registers 7 tools (play, search, playlist, etc.), and the model uses `spotify_search` just like it uses `read_file`.
 
-`inject_message()` is for external-event bridging — take the Google Meet plugin as an example: when someone speaks in a meeting, the plugin injects the transcript text into the Agent's conversation stream. Note: **in gateway mode `inject_message()` silently fails** (when `_cli_ref` is None it logs a warning and `return False`, `plugins.py:485-488`), because it depends on the CLI's input queue. Injecting while the Agent is executing a task interrupts the current task; injecting while the Agent is idle enters the queue to wait for the next round.
+`inject_message()` is for external-event bridging — take the Google Meet plugin as an example: when someone speaks in a meeting, the plugin injects the transcript text into the Agent's conversation stream. Note: **in Gateway mode `inject_message()` silently fails** (when `_cli_ref` is None it logs a warning and `return False`, `plugins.py:485-488`), because it depends on the CLI's input queue. Injecting while the Agent is executing a task interrupts the current task; injecting while the Agent is idle enters the queue to wait for the next round.
 
 The `llm` property returns a `PluginLlm` facade (`agent/plugin_llm.py`), through which a plugin accesses the auxiliary LLM client covered in Chapter 02 (`auxiliary_client.py`) for its own inference, not consuming the main model's quota. This facade has a security design of the same origin as "a tool override needs `allow_tool_override` permission" — model/provider/auth overrides are fail-closed by default and must be explicitly opened via `plugins.entries.<plugin_id>.llm.*` config, preventing a plugin from switching to a different model or credentials on its own.
 
@@ -172,7 +172,7 @@ flowchart TD
     PRE_TOOL -.-> APPROVAL["pre_approval_request<br/>post_approval_response<br/>approval observation"]
 ```
 
-**Figure: Where plugin hooks fire in the Agent workflow** (the figure shows hooks within the main conversation loop; those not on the main loop include: `subagent_start`/`subagent_stop` (subagent start/stop), `pre_gateway_dispatch` (before the Gateway authorization check, see Chapter 05), `api_request_error` (on an API error), `pre_verify` (the post-code-edit verification gate, which can have the Agent keep running checks rather than stop), and the kanban trio `kanban_task_claimed/completed/blocked` (kanban-task lifecycle events, defined in `hermes_cli/plugins.py`'s `VALID_HOOKS`), for 23 `VALID_HOOKS` in total)
+**Figure: Where plugin hooks fire in the Agent workflow** (the figure shows hooks within the main conversation loop; those not on the main loop include: `subagent_start`/`subagent_stop` (subagent start/stop), `pre_gateway_dispatch` (before the Gateway authorization check, see Chapter 05), `api_request_error` (on an API error), `pre_verify` (the post-code-edit verification gate, which can have the Agent keep running checks rather than stop), and the Kanban trio `kanban_task_claimed/completed/blocked` (Kanban-task lifecycle events, defined in `hermes_cli/plugins.py`'s `VALID_HOOKS`), for 23 `VALID_HOOKS` in total)
 
 Key hooks explained:
 
@@ -192,7 +192,7 @@ Hooks can only **observe or intercept**; the middleware added in v0.17 (`hermes_
 
 The two semantics are completely different:
 
-- **Request middleware** (`apply_llm_request_middleware`/`apply_tool_request_middleware`, `:76-161`): chained rewriting — each callback can return `{"request": {...}}` or `{"args": {...}}` to **replace** the original payload, and it happens **before** hooks/security-defenses/approval see it; returning nothing or a non-dict passes through to the next
+- **Request middleware** (`apply_llm_request_middleware`/`apply_tool_request_middleware`, `:76-161`): chained rewriting — each callback can return `{"request": {...}}` or `{"args": {...}}` to **replace** the original payload, and it happens **before** hooks/security defenses/approval see it; returning nothing or a non-dict passes through to the next
 - **Execution middleware** (`run_tool_execution_middleware`/`run_llm_execution_middleware`, `:172-296`): the onion model — each callback gets a `next_call()` to invoke the next layer (or the final execution body). `next_call()` **can only be called once** (a repeat call raises RuntimeError); a downstream exception is re-raised as-is through the wrapping; if the callback itself errors but downstream already succeeded, it returns the downstream result rather than failing the whole chain
 
 ```mermaid

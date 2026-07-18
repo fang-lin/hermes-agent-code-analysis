@@ -17,6 +17,8 @@
 3. **数字保真**：所有数字（行数、次数、阈值、版本号、端口）原样照搬，不四舍五入、不改写。
 4. **官方文档链接**：`https://hermes-agent.nousresearch.com/docs/...` 路径原样保留；链接的显示文字（如「延伸阅读」）译成英文。
 5. **保持术语单复数/大小写一致**：见下表「说明」列的约定。
+6. **代码块里的「自然语言字符串值」可译**：CLI 示例里作为演示内容的自然语言字符串值（如 `--title "实现用户登录 API"` 的标题、`--summary`/`body=` 的正文）译成英文，方便英文读者理解——这不违反规则 2，因为改的是给人读的示例内容，不是命令结构、标识符、flag 名。但字符串若本身是标识符/slug/枚举值（如 `--assignee backend-dev`、`board=default`），保持原样不译。
+7. **「N 件套」译成集合名词**：中文口语「三件套/四件套」指一组固定钩子/组件时，译成 trio/quartet 等集合名词（看板三件套→Kanban trio、会话四件套→session quartet），而非 "three-piece set"。
 
 ## 逐词表
 
@@ -37,7 +39,8 @@
 | 用户授权（谁能跟 bot 对话） | user authorization | gateway 层：`_is_user_authorized`、allowlist/DM pairing。**不要和 approval 混译** |
 | 凭证池 | credential pool | |
 | 轨迹 | trajectory | 训练数据语境 |
-| 看板 | Kanban | 首字母大写 |
+| 看板（系统/专名） | Kanban | 首字母大写；指 Kanban 系统本身（Kanban System、Kanban 调度器） |
+| 看板（具体板实例） | board | 指某一块具体的板（default board、board slug）；源码本身用 `board=`/`boards/`/`HERMES_KANBAN_BOARD`/`kanban boards switch`，跟随源码小写 |
 | 后台线程 / daemon 线程 | daemon thread | `threading.Thread(daemon=True)`（全仓 157 处）：CLI 的 Agent 调用、MCP 事件循环、技能 review、缓存清理等。**不译成 daemon process** |
 | 守护进程 | daemon process / daemon | 独立 OS 进程：`hermes kanban daemon`、systemd service（`hermes-kanban-dispatcher.service`）；02 章 LSP「避免启动守护进程」也指进程。**与 daemon thread 是两回事** |
 | 派发器 | Dispatcher | Kanban 语境，首字母大写 |
@@ -214,6 +217,21 @@
 | 抖动防抖（respawn） | respawn guard | check_respawn_guard 四规则 |
 | 假阻塞 / 真阻塞 | pseudo-block / real block | dependency vs needs_input 等 |
 | 工作区 | workspace | scratch/dir/worktree |
+| 三种面孔 / 六种跑法 | three faces / six ways to run | 10 章标题，意译保留张力 |
+| 渲染管线 | rendering pipeline | _render_final_assistant_content |
+| 界面分流 | interface routing | cmd_chat 分流三界面 |
+| 模态状态机 | modal state machine | 已在词库；输入框语境 |
+| 幻觉过滤 | hallucination filtering | Whisper 幻觉短语过滤 |
+| panic hook | panic hook | tui_gateway 崩溃取证，保留原词 |
+| 崩溃取证 | crash forensics | tui_gateway_crash.log |
+| 瘦客户端 | thin client | TUI 附着已有 gateway |
+| 目标延续 | goal continuation | _maybe_continue_goal_after_turn |
+| 遮罩 / 浮层 | overlay | approval/clarify/sudo 遮罩、模态浮层 |
+| 收回控制权 | reclaim control | 打断后 join |
+| 兜底 | fallback / safety net | 失败模式兜底 |
+| 双鉴权 | dual authentication | loopback token vs OAuth cookie |
+| 安全模式库 | security-pattern library | `plugins/security-guidance/`；与「威胁模式库 threat-pattern library」是不同概念（安全≠威胁），勿混 |
+| 会话四件套 | session quartet | `on_session_start/end/finalize/reset` 四个钩子；见总规则 7 |
 | 卡死循环 / stuck loop | stuck loop | `_STUCK_LOOP_THRESHOLD`，保留原词 |
 | 洪泛控制 / Flood control | flood control | stream_consumer 限速降级，源码原词 |
 | Deliverable Mode | Deliverable Mode | 官方特性名，MEDIA: 标签变附件，专名大写保留 |
