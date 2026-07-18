@@ -292,6 +292,31 @@
 | 爆炸半径 | blast radius | 懒安装：可选依赖被投毒不连累其它 |
 | 结语 | Epilogue | 全书收尾 |
 | kawaii | kawaii | 日语借词，源码自用（display.py/skin_engine.py），保留原词不译 |
+| 引导安装器 / bootstrap 安装器 | bootstrap installer | Tauri 单文件启动器 |
+| 后端保姆 | backend babysitter | 主进程管后端生命周期，14 章比喻 |
+| 纯函数模块 | pure-function module | 无 require('electron') 便于单测 |
+| 失败闩锁 | failure latch | 起过一次失败就重抛，防反复安装 |
+| 孤儿检测 | orphan detection | served token≠spawn token 且子进程已死 |
+| 后端进程池 | backend process pool | 多 Profile，LRU 淘汰 |
+| LRU 淘汰 | LRU eviction | POOL_MAX_BACKENDS |
+| idle reaper | idle reaper | 回收空闲后端，保留原词 |
+| 自更新 | self-update | 双轨更新 |
+| 双轨 | dual-track | 同一更新在不同平台的两种落地 |
+| staged updater | staged updater | Tauri updater，保留原词 |
+| 契约 | contract | @hermes/shared 事件契约 |
+| 帧格式 | frame format | 一条 WS 跑两种帧 |
+| 指数退避重连 | exponential-backoff reconnect | use-gateway-boot.ts |
+| 铸 ticket / 铸票 | mint a ticket | OAuth 一次性 ws-ticket |
+| 活性判断 / 活性校验 | liveness check | cookiesHaveLiveSession |
+| 功能模块地图 | feature-module map | 20 模块地图 |
+| Web 壳 | Web shell | Electron 包 Web Dashboard |
+| 零侵入 | zero-intrusion | 桌面不 import Python |
+| 星图 | Star Map | 会话星图可视化，专名 |
+| 桌面宠物 / petdex | desktop pet / petdex | 保留 petdex 原词 |
+| 命令面板 | command palette | |
+| 系统托盘 | system tray | |
+| 项目（桌面工作区） | Project | 具名工作区 projects.db，桌面/TUI 独有；专名首字母大写 |
+| Profile（配置档专名） | Profile | 大写专名，与 01 章「Profile 系统」一致；但代码字段 `profile` 和 per-profile 复合修饰词保持小写 |
 | 卡死循环 / stuck loop | stuck loop | `_STUCK_LOOP_THRESHOLD`，保留原词 |
 | 洪泛控制 / Flood control | flood control | stream_consumer 限速降级，源码原词 |
 | Deliverable Mode | Deliverable Mode | 官方特性名，MEDIA: 标签变附件，专名大写保留 |

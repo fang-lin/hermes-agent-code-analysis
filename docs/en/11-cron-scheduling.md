@@ -19,7 +19,7 @@ So Hermes implemented a **pure application-layer cron** (the `cron/` directory),
 
 By the end you should be able to: schedule tasks in natural language or a cron expression, attach skills to a task, turn a monitoring script into a watchdog that "only talks when something's wrong," chain tasks into a multi-stage pipeline, and know where to look when a task doesn't run on time.
 
-> **Scope note**: Chapter 05 covers how the gateway sends and receives messages — cron's tick is driven precisely by the gateway's background thread, but this chapter focuses on the scheduling logic itself. Chapter 09's Kanban has a `scheduled` state that integrates with cron; that's the timed triggering of Kanban cards. This chapter covers the general cron task system. v1 once combined cron with ACP/MCP serve in one chapter; v2 has moved the latter two into Chapter 06 (the protocol-adaptation layer), so this chapter can focus on covering cron thoroughly.
+> **Scope note**: Chapter 05 covers how the gateway sends and receives messages — cron's tick is driven precisely by the gateway's daemon thread, but this chapter focuses on the scheduling logic itself. Chapter 09's Kanban has a `scheduled` state that integrates with cron; that's the timed triggering of Kanban cards. This chapter covers the general cron task system. v1 once combined cron with ACP/MCP serve in one chapter; v2 has moved the latter two into Chapter 06 (the protocol-adaptation layer), so this chapter can focus on covering cron thoroughly.
 
 ---
 
@@ -117,7 +117,7 @@ Expected: when the script's last line is `{"wakeAgent": false}`, cron skips the 
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Task doesn't run on time | The gateway isn't running (cron is driven by the gateway's background thread) | `hermes cron status` to check gateway status; use `hermes gateway install` to install it as a service |
+| Task doesn't run on time | The gateway isn't running (cron is driven by the gateway's daemon thread) | `hermes cron status` to check gateway status; use `hermes gateway install` to install it as a service |
 | Missed tasks aren't backfilled after a downtime restart | Beyond the grace window, silently fast-forwarded | This is by design (see the grace window below); to run immediately use `hermes cron run <id>` |
 | Task ran but no message received | The reply contains `[SILENT]` (substring match, case-insensitive), delivery suppressed | Check whether the prompt tells the model to reply `[SILENT]` when "nothing's wrong"; failed tasks always deliver, unaffected by this |
 | Creating a task reports "injection blocked" | The prompt hit the injection/exfiltration scan | Check for invisible Unicode, `curl` with a secret, `authorized_keys` and other patterns (`cronjob_tools.py`) |
@@ -125,7 +125,7 @@ Expected: when the script's last line is `{"wakeAgent": false}`, cron skips the 
 | `croniter` errors | Used a cron expression but croniter isn't installed | `pip install croniter` (now a core dependency, the error branch at `jobs.py:401-404`) |
 | Two tasks with a workdir interfere with each other | Parallel workdir tasks pollute each other's cwd | This is why workdir tasks are forced serial (see below) |
 | Task has `enabled=true` but never runs | A looping task can't compute next_run (most likely the gateway doesn't have croniter), set to `state=error` | `hermes cron list --all` to see that task's `last_status`/`last_error` (there's no `cron get` subcommand); install `croniter` |
-| Task started but no result for a long time | An API call is stuck / a tool is hanging, triggering the liveness timeout | Check the log `Job '...' idle for Xs` (default 600s of no activity); `HERMES_CRON_TIMEOUT` is tunable |
+| Task started but no result for a long time | An API call is stuck / a tool is hanging, triggering the liveness-based timeout | Check the log `Job '...' idle for Xs` (default 600s of no activity); `HERMES_CRON_TIMEOUT` is tunable |
 | `last_status=ok` but no message received | Execution succeeded, delivery failed (two separate fields) | `hermes cron list --all` to see that task's `last_delivery_error` (there's no `cron get` subcommand) |
 
 > 📖 **Further Reading (Official Docs):**
@@ -200,7 +200,7 @@ The cron mode has a key detail: when computing the next time, it **prefers `last
 
 ### The tick Execution Engine: Four Mechanisms Guaranteeing "No Over-Run, No Missed Run, No Empty Run"
 
-Cron's heart is `tick()` (`cron/scheduler.py:3400`). Hermes's message gateway (the gateway, Chapter 05) starts a background ticker thread (near gateway/run.py:19989; the former `_start_cron_ticker` has degenerated into a compatibility shim) that calls `tick()` once **every 60 seconds**. Since v0.18 the heartbeat source is no longer unique: the desktop/Web backend (web_server.py, Chapter 10) carries an embedded ticker, and an external scheduler Provider (see "Scheduler Provider" below) can also be a trigger source — but the premise "if no ticker is running, nobody triggers" is unchanged. The complete flow of one tick:
+Cron's heart is `tick()` (`cron/scheduler.py:3400`). Hermes's message gateway (the gateway, Chapter 05) starts a daemon ticker thread (near gateway/run.py:19989; the former `_start_cron_ticker` has degenerated into a compatibility shim) that calls `tick()` once **every 60 seconds**. Since v0.18 the heartbeat source is no longer unique: the desktop/Web backend (web_server.py, Chapter 10) carries an embedded ticker, and an external scheduler Provider (see "Scheduler Provider" below) can also be a trigger source — but the premise "if no ticker is running, nobody triggers" is unchanged. The complete flow of one tick:
 
 **Figure: The complete flow of one tick — lock, advance early, partition-execute, deliver, update state**
 
@@ -243,7 +243,7 @@ The four mechanisms guarantee what each tick runs and when — the next question
 
 One tick may have multiple tasks fall due at the same time. Can they all run in parallel? Most can — tick executes in parallel with a thread pool (`scheduler.py:3565`, `max_workers` taken as "env var > config > no cap"). But **tasks with a `workdir`** are forced out to execute **serially** (the partition criterion at `scheduler.py:3490` looks only at the single field `workdir`): `workdir` takes effect via the process-level `TERMINAL_CWD` environment variable, and two workdir tasks in parallel would overwrite each other's working directory. There's also a `_terminal_cwd_lock` read-write lock specifically preventing "a parallel task with no workdir" from reading the `TERMINAL_CWD` a "task with a workdir" temporarily set.
 
-So the criterion is clear: **a task that changed the process-level cwd must serialize, the rest parallelize**. This also explains a usage-level phenomenon — after setting a task's `workdir`, it's no longer in the parallel pool. (Note: an early version had `profile` as one of the serialization criteria too, but since v0.17-v0.18 `profile` is no longer a per-job field; profile isolation is now carried by per-profile `HERMES_HOME` and each one's own `jobs.json`, see the "Expansion" section below.)
+So the criterion is clear: **a task that changed the process-level cwd must serialize, the rest parallelize**. This also explains a usage-level phenomenon — after setting a task's `workdir`, it's no longer in the parallel pool. (Note: an early version had `profile` as one of the serialization criteria too, but since v0.17-v0.18 `profile` is no longer a per-job field; Profile isolation is now carried by per-profile `HERMES_HOME` and each one's own `jobs.json`, see the "Expansion" section below.)
 
 **Figure: tick's concurrency partition — tasks with process-level global state (cwd/HERMES_HOME) serialize, the rest parallelize**
 
@@ -281,7 +281,7 @@ Each task also creates a `SessionDB` session record, so content produced by cron
 The result is delivered to the target specified by `deliver`, supporting a single one, multiple (comma-separated), and the routing token `all` (expanded at fire time to all platforms with a home channel configured). Delivery takes two paths (`_deliver_result` in `cron/scheduler.py`):
 
 - **Prefer the gateway's running live adapter**: for platforms needing end-to-end encryption (like Matrix) this is required — only an established encrypted session can send a message.
-- **When the gateway isn't running, fall back to a standalone HTTP client**: sending in a separate event loop via `asyncio.run()`. If the current thread already has a running event loop causing `asyncio.run()` to throw a `RuntimeError`, take one more step back — throw it into a new `ThreadPoolExecutor` thread to run (a 30s timeout backstop), avoiding "already has an event loop" making delivery fail outright.
+- **When the gateway isn't running, fall back to a standalone HTTP client**: sending in a separate event loop via `asyncio.run()`. If the current thread already has a running event loop causing `asyncio.run()` to throw a `RuntimeError`, take one more step back — throw it into a new `ThreadPoolExecutor` thread to run (a 30s timeout safety net), avoiding "already has an event loop" making delivery fail outright.
 
 The delivery-target syntax (the official doc `cron.md`): `origin` (back to where it was created), `local` (save file only), `telegram:123` (a specific chat), `telegram:-100:17585` (a specific topic thread), `discord:#eng` (a channel name), `all` (all), `origin,all` (back to source + all, deduplicated by `(platform, chat, thread)`).
 
@@ -312,7 +312,7 @@ The cron subsystem nearly doubled between v0.17-v0.18 (3,217 → 7,402 lines), w
 
 **⑥ A gateway lifecycle guard** (`cron/lifecycle_guard.py`, 141 lines, #30719). Intercepts a cron task executing something like `hermes gateway restart` inside its own body — the deadloop of task restarts gateway → gateway restart kills the task → next tick runs again and restarts again, now has a gate.
 
-**The job fields were also swapped around**: removed `profile` (profile isolation is now carried by per-profile HERMES_HOME dynamic resolution, #4707); added `attach_to_session` (paired with **mirror delivery** — cron output mirrored back into the source session in a way that doesn't break conversation alternation), `paused_at/paused_reason` (pausable), `schedule_display`, `fire_claim/run_claim`, the two snapshot fields.
+**The job fields were also swapped around**: removed `profile` (Profile isolation is now carried by per-profile HERMES_HOME dynamic resolution, #4707); added `attach_to_session` (paired with **mirror delivery** — cron output mirrored back into the source session in a way that doesn't break conversation alternation), `paused_at/paused_reason` (pausable), `schedule_display`, `fire_claim/run_claim`, the two snapshot fields.
 
 ### Code Organization
 
@@ -347,7 +347,7 @@ gateway/run.py:19989    — _start_cron_ticker (now a compatibility shim, actual
 | workdir tasks serialize | cwd is process-level global state | such tasks have no concurrency | all parallel — pollute each other |
 | Scan the assembled prompt again at runtime | plug malicious-skill runtime injection (#3968) | one extra scan of overhead | scan only at creation — skill injection slips through |
 | Fresh session + disable the cronjob tool | self-contained, prevents recursive scheduling explosion | the prompt must be self-contained | with history — risk of recursive task creation |
-| Liveness timeout (600s of no activity) rather than total-duration timeout | a long task that keeps working isn't killed by mistake, a stuck task can't escape either | needs to poll the activity summary | total-duration timeout — would kill a normal long task by mistake |
+| Liveness-based timeout (600s of no activity) rather than total-duration timeout | a long task that keeps working isn't killed by mistake, a stuck task can't escape either | needs to poll the activity summary | total-duration timeout — would kill a normal long task by mistake |
 | ContextVar isolation + clearing HERMES_SESSION_* | parallel tasks' delivery targets don't cross-contaminate; tools don't mis-judge it as a real user message | one more layer of state management | use os.environ — parallel overwrite each other |
 | A looping task that can't compute next_run set to error not completed | a missing dependency doesn't silently stop the user's scheduled task (#16265) | the user needs to check state | set completed — the task disappears silently |
 
@@ -356,14 +356,14 @@ gateway/run.py:19989    — _start_cron_ticker (now a compatibility shim, actual
 - **Attach skills**: `skills=[...]`, injects skill content in order before running, reusing a tested workflow.
 - **Pre-check script + wake gate**: `script=` + the script outputs `{"wakeAgent": false}`, deciding whether to wake the LLM at $0 cost.
 - **Task chain**: `context_from=[job_id, ...]`, injects a predecessor task's output into the current prompt, making a multi-stage pipeline.
-- **Per-job isolation**: `workdir` (injects AGENTS.md/CLAUDE.md + sets cwd), `enabled_toolsets` (cost control). Profile isolation no longer goes through a per-job field — each profile has its own `~/.hermes/profiles/<name>/cron/jobs.json`.
+- **Per-job isolation**: `workdir` (injects AGENTS.md/CLAUDE.md + sets cwd), `enabled_toolsets` (cost control). Profile isolation no longer goes through a per-job field — each Profile has its own `~/.hermes/profiles/<name>/cron/jobs.json`.
 - **Delivery plugin platforms**: a platform adapter can self-register a cron delivery target.
 
 ---
 
 ## Relationship to Other Chapters
 
-- **Chapter 05 (Gateway Layer)**: cron's tick is driven by the gateway's `cron-scheduler` background thread every 60 seconds (`_start_cron_ticker` has now degenerated into a compatibility shim, the actual implementation is `InProcessCronScheduler`); delivery preferentially reuses the gateway's live adapter. With no gateway running, cron tasks don't trigger automatically (CLI mode only ticks when running a `hermes cron` command). Incidentally, the gateway's periodic maintenance (refreshing the channel catalog every 5 minutes, clearing the image/paste cache every hour, triggering the skill Curator every hour) **has been split out of the cron ticker** and runs in another separate thread `gateway-housekeeping` (`_start_gateway_housekeeping`, `gateway/run.py:19900`) — cron scheduling and gateway maintenance are now two threads each minding their own business.
+- **Chapter 05 (Gateway Layer)**: cron's tick is driven by the gateway's `cron-scheduler` daemon thread every 60 seconds (`_start_cron_ticker` has now degenerated into a compatibility shim, the actual implementation is `InProcessCronScheduler`); delivery preferentially reuses the gateway's live adapter. With no gateway running, cron tasks don't trigger automatically (CLI mode only ticks when running a `hermes cron` command). Incidentally, the gateway's periodic maintenance (refreshing the channel catalog every 5 minutes, clearing the image/paste cache every hour, triggering the skill Curator every hour) **has been split out of the cron ticker** and runs in another separate thread `gateway-housekeeping` (`_start_gateway_housekeeping`, `gateway/run.py:19900`) — cron scheduling and gateway maintenance are now two threads each minding their own business.
 - **Chapter 02 (Agent Core)**: each task runs a fresh `AIAgent.run_conversation()`, inheriting fallback providers and the credential pool (detailed in Chapter 02).
 - **Chapter 04 (Skill System)**: a task can attach skills, injecting SKILL.md content before running; when the Curator merges/deprecates skills, it auto-fixes the skill references in cron tasks.
 - **Chapter 09 (Kanban)**: Kanban's `scheduled` state integrates with cron, for the timed triggering of cards.
