@@ -104,6 +104,12 @@ This analysis supersedes an earlier one of v0.11.0 (12 documents). The main shif
 - **A desktop client appeared** (v0.17) — a full Electron + React app with a Tauri bootstrap installer, added as Chapter 14.
 - **The doc set grew** from 12 to 15 chapters and is now **fully bilingual** (Chinese + English).
 
+## Agent Skill — put this expertise inside your coding agent
+
+Beyond reading, this analysis is packaged as an **Agent Skill** ([`.claude/skills/hermes-agent-expert/`](.claude/skills/hermes-agent-expert/)) so a coding agent (Claude Code, etc.) can *use* it — to set up, configure, debug, customize, or extend hermes-agent with source-grounded judgment, and to navigate straight to the right hermes source when it needs to. Its design is a progressive Tier 0→3 ladder that ends at reading the real source; ~200 of its `file:line`/symbol/config anchors are mechanically verified against the pinned checkout.
+
+Install (per-project): copy the folder into your hermes repo's `.claude/skills/` — it auto-loads when your request matches. Full install / usage / maintenance docs: **[the skill's README](.claude/skills/hermes-agent-expert/README.md)**.
+
 ## Disclaimer
 
 Independent analysis, not official Nous Research documentation. All code references have been independently verified. Based on v0.18.2 source; later versions may differ.
