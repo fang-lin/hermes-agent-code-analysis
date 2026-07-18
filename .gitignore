@@ -7,3 +7,4 @@ hermes-agent/
 !.claude/agents/
 !.claude/skills/
 .antigravitycli/
+hermes-drift-report.md
