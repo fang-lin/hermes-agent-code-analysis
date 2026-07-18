@@ -689,7 +689,7 @@ v0.11.0's `run_agent.py` had 13,293 lines; v0.14.0 shrank it to 4,309 lines afte
 
 #### MoA Not Made a Tool
 
-Making "multi-model aggregation" a tool the model can call autonomously (the v0.14 approach) means the model itself decides when to spend triple the money. v0.18 refactored it into a user-explicitly-triggered loop mode + virtual provider — moving the cost decision from the model's hands back to the user's. This is a sample of a "which layer to put a capability at" architectural decision: the same functionality, made as a tool, a loop mode, or a Provider, has completely different cost models and user experiences.
+Making "multi-model aggregation" (MoA) a tool the model can call autonomously (the v0.14 approach) means the model itself decides when to spend triple the money. v0.18 refactored it into a user-explicitly-triggered loop mode + virtual provider — moving the cost decision from the model's hands back to the user's. This is a sample of a "which layer to put a capability at" architectural decision: the same functionality, made as a tool, a loop mode, or a Provider, has completely different cost models and user experiences.
 
 #### The Introduction of the Error Classifier
 
