@@ -195,7 +195,7 @@ flowchart TD
 ❼❽❾ 这三步合在一起完成同一件事：**把 Agent 内部的 `messages` 列表变成 Provider 可以接受的 API 请求**——过程中涉及注入、清理、格式转换三类操作。
 
 **❼ 组装 API 消息**（`conversation_loop.py:787` 起）——从 `messages` 生成一份 `api_messages` 副本（不修改原始列表），分三类操作处理：
-- **注入**：把步骤 ❹ 的记忆检索结果和步骤 ❺ 的插件上下文追加到当前用户消息末尾（`:791-808` 的注释明说"仅 API 调用时注入，原始消息永不变异，不进会话持久化"）；拷贝推理内容（`reasoning_content`）供多轮推理延续
+- **注入**：把步骤 ❹ 的记忆检索结果和步骤 ❺ 的插件上下文追加到当前用户消息末尾（`agent/conversation_loop.py:791-808` 的注释明说"仅 API 调用时注入，原始消息永不变异，不进会话持久化"）；拷贝推理内容（`reasoning_content`）供多轮推理延续
 - **清理**：去除内部标记字段（`finish_reason`、`_thinking_prefill` 等），这些是 Agent 内部状态，不应发给 API
 - **标准化**：工具调用参数做 `sort_keys=True`、`separators=(",", ":")` 序列化，保证相同内容的字节表示一致，防止 Prompt Caching 因序列化差异 miss
 

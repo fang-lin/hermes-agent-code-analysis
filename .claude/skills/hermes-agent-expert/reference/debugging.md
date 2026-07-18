@@ -24,7 +24,7 @@ Each line carries a ` [session_id]` tag → `grep '\[<id>\]' agent.log` pulls on
 |---|---|---|
 | always on | `~/.hermes/interrupt_debug.log` | interrupt/steer chain — enqueue (`cli.py:13448`) + actual `agent.interrupt()` (`:12361`) |
 | always on | `~/.hermes/logs/tui_gateway_crash.log` | Ink TUI panic-hook full stack + `[gateway-crash]` summary in the Activity panel |
-| `HERMES_OAUTH_TRACE=1` | structured JSON in log (`auth.py:861`) | every OAuth event — device-code / token-refresh issues |
+| `HERMES_OAUTH_TRACE=1` | structured JSON in log (`hermes_cli/auth.py:861`) | every OAuth event — device-code / token-refresh issues |
 | `HERMES_PLUGINS_DEBUG=1` | stderr + agent.log | full plugin discovery/load log (rejection reasons) |
 | `HERMES_LANGFUSE_DEBUG=true` | detailed log | Langfuse tracing not working |
 | `/verbose` (in TUI) | debug log | input-preprocessing strip actions (why "sent ≠ typed") |
@@ -39,7 +39,7 @@ Each line carries a ` [session_id]` tag → `grep '\[<id>\]' agent.log` pulls on
 |---|---|
 | `hermes doctor` | dozen+ checks (version consistency, certs, gateway service, managed scope, Provider health), OK/WARN/FAIL (`doctor.py`) |
 | `hermes doctor --ack <id>` | dismiss a supply-chain advisory permanently |
-| `hermes tools` | per-tool enable status + why a tool is unavailable |
+| `hermes tools` | per-tool enable status + why a tool is unavailable. **TTY-only** — errors `requires an interactive terminal` through a pipe/cron/SSH-non-tty; in non-interactive envs use `hermes doctor` or grep `tools/registry.py` directly. |
 | `hermes plugins list` | discovered / enabled / **deferred**; the `error` field = rejection reason |
 | `hermes gateway status` | gateway process status, orphan-reap / PID-mismatch notices |
 | `hermes auth status` | each Provider's auth status |
@@ -71,11 +71,11 @@ These fail **without an obvious error** — the #1 source of "it just doesn't wo
 - **`hermes` starts very slowly** — Android/Termux has fast-launch tiers; else check Python version.
 - **Config change ignored** — signature cache; confirm saved; restart gateway if it holds a stale cache.
 - **`config.yaml` syntax error** — see silent-failure catalog; read `hermes logs`/stderr for the YAML parse error.
-- **`auth.json` corrupted / operation stuck** — reads/writes serialized via `_auth_store_lock()` (advisory flock, `auth.py:1048`); a leftover `auth.json.lock` file ≠ held lock. Real stall = a process holds it; wait 15s (`AUTH_LOCK_TIMEOUT_SECONDS`) for `TimeoutError`, use `fuser`/`lsof`. Corrupt JSON → delete `~/.hermes/auth.json`, `hermes login` again.
+- **`auth.json` corrupted / operation stuck** — reads/writes serialized via `_auth_store_lock()` (advisory flock, `hermes_cli/auth.py:1048`); a leftover `auth.json.lock` file ≠ held lock. Real stall = a process holds it; wait 15s (`AUTH_LOCK_TIMEOUT_SECONDS`) for `TimeoutError`, use `fuser`/`lsof`. Corrupt JSON → delete `~/.hermes/auth.json`, `hermes login` again.
 - **Provider auth failure** — `hermes auth status`; expired OAuth → `hermes login`; API-key var name must match `api_key_env_vars` in `PROVIDER_REGISTRY`; `HERMES_OAUTH_TRACE=1` for OAuth flow.
 - **`hermes login` hangs then errors** — device-code flow waiting on browser; complete authorization promptly.
 - **Connected to an unexpected Provider** — `provider=auto` is an 8-level precedence chain; an exported API key preempts OAuth (stderr says which var to unset).
-- **Config wrong after switching Profiles** — `_apply_profile_override()` (`main.py:340`) must run before imports; if launched oddly, `HERMES_HOME` may be unset — check `get_hermes_home()`.
+- **Config wrong after switching Profiles** — `_apply_profile_override()` (`hermes_cli/main.py:340`) must run before imports; if launched oddly, `HERMES_HOME` may be unset — check `get_hermes_home()`.
 - **Gateway restart / abnormal status** — `hermes gateway restart` = SIGUSR1 graceful drain; config drift → `hermes gateway install --force`.
 
 ### Agent core (ch02)
@@ -90,7 +90,7 @@ These fail **without an obvious error** — the #1 source of "it just doesn't wo
 ### Tools (ch03)
 - **Model doesn't call a tool** — `hermes tools`; `check_fn` must return True (30s TTL cache); tool must be in the current platform's toolset; with `tool_search` on, non-core tools must be retrieved first.
 - **Registered but never executed** — a `pre_tool_call` hook may have intercepted it (`model_tools.py:1175`); check `_AGENT_LOOP_TOOLS`.
-- **Command denied `BLOCKED`** — HARDLINE match (**cannot** be bypassed, `approval.py:366`), sudo stdin guard (`:448`), DANGEROUS match (`:547`), or gateway approval 300s timeout. Check `command_allowlist`.
+- **Command denied `BLOCKED`** — HARDLINE match (**cannot** be bypassed, `tools/approval.py:366`), sudo stdin guard (`tools/approval.py:448`), DANGEROUS match (`tools/approval.py:547`), or gateway approval 300s timeout. Check `command_allowlist`.
 - **Result truncated** — result >100K chars persisted to `/tmp/hermes-results/`, 1,500-char preview kept; model can `read_file` the full path.
 - **Memory/skill write held pending** — since v0.17 a separate `write_approval` gates persistent memory/skill writes (esp. background self-improvement).
 
@@ -105,7 +105,7 @@ These fail **without an obvious error** — the #1 source of "it just doesn't wo
 - **Bot doesn't reply** — `hermes gateway status`; `gateway.log`; token valid?
 - **Message received but no response** — user authorization (`_is_user_authorized`, DM pairing / allowlist).
 - **Session context gone** — `SessionResetPolicy` (`gateway/config.py:347`) idle/daily reset.
-- **Gateway restarts frequently** — stuck-loop detection: same session active on 3 consecutive restarts → auto-suspended (`run.py:5954`).
+- **Gateway restarts frequently** — stuck-loop detection: same session active on 3 consecutive restarts → auto-suspended (`gateway/run.py:5954`).
 - **One platform down, others fine** — independent reconnect (`_platform_reconnect_watcher`, exponential backoff).
 - **Pairing code always invalid** — pairing rate-limit/lockout; wait or clear pending records.
 - **Interrupt doesn't interrupt** — active subagent / compression-in-progress auto-degrade to queue.

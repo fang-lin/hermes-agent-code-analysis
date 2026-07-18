@@ -18,14 +18,14 @@ No code. A skill is a `SKILL.md` (frontmatter + markdown body) that teaches the 
 ## 2. A Tool / 加工具
 - **Built-in**: create `tools/<name>.py` → define schema + handler → `registry.register(...)` declaring the schema, handler, and owning **toolset**.
 - **Via plugin** (no core edit): `ctx.register_tool(...)` — same interface.
-- **Gotchas**: `check_fn` gates visibility (30s TTL cache, `registry.py:134`); the tool must be in the current platform's toolset; with `tool_search` on, non-core tools must be retrieved first to become visible.
+- **Gotchas**: `check_fn` gates visibility (30s TTL cache, `tools/registry.py:134`); the tool must be in the current platform's toolset; with `tool_search` on, non-core tools must be retrieved first to become visible.
 - **Source**: `tools/registry.py`, `model_tools.py` (`handle_function_call` dispatch), `toolsets.py`. Deep: `docs/en/03-tool-system.md`.
 
 ## 3. A plugin + lifecycle hook / 加插件与钩子
 - **Where**: `~/.hermes/plugins/<name>/` with a `plugin.yaml` + Python module (or a pip entry-point package).
 - **Register in the plugin**: `ctx.register_hook(event, fn)` — 23 events in `VALID_HOOKS` (`hermes_cli/plugins.py:135`). Declare them in `plugin.yaml`'s `provides_hooks`.
 - **Middleware** (heavier): `register_middleware("llm_execution"/"tool_execution")` wraps actual execution (onion model, ch07).
-- **Gotchas**: enable via `plugins.enabled` (denylist `plugins.disabled`); one plugin failing is isolated (each register call is try-except'd); `HERMES_PLUGINS_DEBUG=1` shows discovery/rejection; **discovery timing** — plugins load later than the first env read (`plugins.py:812`), so a custom secret source only affects subprocess/cron/subagents on first launch, or call `reset_secret_source_cache()`; `pre_verify` has a hard cap `agent.max_verify_nudges` (default 3).
+- **Gotchas**: enable via `plugins.enabled` (denylist `plugins.disabled`); one plugin failing is isolated (each register call is try-except'd); `HERMES_PLUGINS_DEBUG=1` shows discovery/rejection; **discovery timing** — plugins load later than the first env read (`hermes_cli/plugins.py:812`), so a custom secret source only affects subprocess/cron/subagents on first launch, or call `reset_secret_source_cache()`; `pre_verify` has a hard cap `agent.max_verify_nudges` (default 3).
 - **Source**: `hermes_cli/plugins.py` (PluginContext, VALID_HOOKS). Deep: `docs/en/07-plugin-framework.md`.
 
 ## 4. A messaging platform / 加消息平台
@@ -36,7 +36,7 @@ Platforms are **plugins** now (since v0.15), not gateway built-ins.
 - **Source**: `gateway/platforms/base.py` (the ABC), `gateway/platform_registry.py`, `plugins/platforms/<name>/`. Deep: `docs/en/05-gateway.md`, `08-builtin-plugins.md`.
 
 ## 5. A model Provider / 加模型供应商
-- Drop a plugin under `plugins/model-providers/` → it auto-expands `PROVIDER_REGISTRY` (`auth.py:447`).
+- Drop a plugin under `plugins/model-providers/` → it auto-expands `PROVIDER_REGISTRY` (`hermes_cli/auth.py:447`).
 - For a simple provider, no plugin needed — just add to the `providers:` section of `config.yaml`.
 - **Source**: `auth.py`, `PROVIDER_REGISTRY`. Deep: `docs/en/08-builtin-plugins.md`.
 

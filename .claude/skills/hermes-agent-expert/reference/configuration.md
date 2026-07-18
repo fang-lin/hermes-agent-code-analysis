@@ -8,9 +8,9 @@ The authoritative source is the running `~/.hermes/config.yaml` (~1,440 lines of
 ## 0. How config loads / 配置怎么加载(先懂这个)
 
 - File: `~/.hermes/config.yaml` (user) merged over a managed file over `DEFAULT_CONFIG`. `load_config()` in `config.py`.
-- **Signature cache**: keyed by mtime_ns/size of user+managed files + a snapshot of referenced env vars (`config.py:226-231`). A running gateway holds its own cache → **edit had no effect ⇒ restart the gateway**.
-- **Syntax error = all overrides lost**: falls back to `DEFAULT_CONFIG`, backs up to `config.yaml.corrupt.<ts>.bak`, warns, rebuilds (`config.py:42/96`).
-- **Programmatic edits must use `atomic_roundtrip_yaml_update`** (ruamel roundtrip) to preserve the user's comments — a plain `yaml.dump` wipes them. `migrate_config()` (`config.py:5395`) is incremental, never deletes fields.
+- **Signature cache**: keyed by mtime_ns/size of user+managed files + a snapshot of referenced env vars (`hermes_cli/config.py:226-231`). A running gateway holds its own cache → **edit had no effect ⇒ restart the gateway**.
+- **Syntax error = all overrides lost**: falls back to `DEFAULT_CONFIG`, backs up to `config.yaml.corrupt.<ts>.bak`, warns, rebuilds (`hermes_cli/config.py:42/96`).
+- **Programmatic edits must use `atomic_roundtrip_yaml_update`** (ruamel roundtrip) to preserve the user's comments — a plain `yaml.dump` wipes them. `migrate_config()` (`hermes_cli/config.py:5395`) is incremental, never deletes fields.
 
 ---
 
@@ -33,7 +33,7 @@ Auth: API keys live in `~/.hermes/.env` (var names must match `api_key_env_vars`
 | Key | Purpose |
 |---|---|
 | `agent.max_turns` / `max_turns` | max tool-iteration rounds per turn. |
-| `agent.max_verify_nudges` | hard cap on `pre_verify` re-runs (default 3, `config.py:1027`) — beyond it the turn ends regardless. |
+| `agent.max_verify_nudges` | hard cap on `pre_verify` re-runs (default 3, `hermes_cli/config.py:1027`) — beyond it the turn ends regardless. |
 | `agent.api_max_retries` | API retry count. |
 | `agent.restart_drain_timeout` | graceful-drain window on gateway restart. |
 | `delegation.max_iterations` | subagent iteration budget (default 50). |
@@ -57,7 +57,7 @@ Auth: API keys live in `~/.hermes/.env` (var names must match `api_key_env_vars`
 | `security.allow_lazy_installs` | allow on-demand optional-dependency install (set false in restricted envs). |
 | `mcp_servers:` | external MCP server configs (extends tool capabilities). |
 
-**Invariant**: the hardline blacklist (`HARDLINE_PATTERNS`, `approval.py:366`) rejects irreversible ops unconditionally — no config, not even `--yolo`, bypasses it. Approval/redaction are heuristics, not security boundaries (ch13).
+**Invariant**: the hardline blacklist (`HARDLINE_PATTERNS`, `tools/approval.py:366`) rejects irreversible ops unconditionally — no config, not even `--yolo`, bypasses it. Approval/redaction are heuristics, not security boundaries (ch13).
 
 ---
 
@@ -117,7 +117,8 @@ Custom skin: `~/.hermes/skins/<name>.yaml` (only the keys to change; `tool_emoji
 ---
 
 ## 7. Profiles / 多配置档
-Each Profile is a fully isolated `~/.hermes/profiles/<name>/` with its own `config.yaml`, `state.db`, `cron/jobs.json`, skins. Switch with `HERMES_HOME`/`HERMES_PROFILE`; `_apply_profile_override()` (`main.py:340`) must run **before imports**. `hermes profile list`. If launched oddly and `HERMES_HOME` is unset, `get_hermes_home()` reveals the actual path.
+Each Profile is a fully isolated `~/.hermes/profiles/<name>/` with its own `config.yaml`, `state.db`, `cron/jobs.json`, skins. `hermes profile list`. If launched oddly and `HERMES_HOME` is unset, `get_hermes_home()` reveals the actual path.
+- **Selecting a profile — prefer the `--profile <name>` flag for subcommands** (`hermes --profile alice cron list --all`). The `HERMES_PROFILE` env var is fragile: `_apply_profile_override()` (`hermes_cli/main.py:340`) must run **before imports**, so for some subcommands (cron/skills) `HERMES_PROFILE=alice hermes cron list --all` silently falls back to the default profile. Set the env var before the process starts, or just use `--profile`.
 
 ---
 

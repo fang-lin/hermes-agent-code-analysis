@@ -195,7 +195,7 @@ flowchart TD
 ❼❽❾ These three steps together accomplish one thing: **turning the Agent's internal `messages` list into an API request the Provider can accept** — a process involving three kinds of operation: injection, cleanup, and format conversion.
 
 **❼ Assemble API messages** (from `conversation_loop.py:787`) — generates an `api_messages` copy from `messages` (without modifying the original list), handled by three kinds of operation:
-- **Injection**: append the memory-retrieval results from step ❹ and the plugin context from step ❺ to the end of the current user message (the comment at `:791-808` explicitly says "injected only for the API call, the original messages are never mutated and never persisted to the session"); copy reasoning content (`reasoning_content`) for multi-turn reasoning continuity
+- **Injection**: append the memory-retrieval results from step ❹ and the plugin context from step ❺ to the end of the current user message (the comment at `agent/conversation_loop.py:791-808` explicitly says "injected only for the API call, the original messages are never mutated and never persisted to the session"); copy reasoning content (`reasoning_content`) for multi-turn reasoning continuity
 - **Cleanup**: remove internal marker fields (`finish_reason`, `_thinking_prefill`, etc.) — these are the Agent's internal state and shouldn't be sent to the API
 - **Standardization**: serialize tool-call arguments with `sort_keys=True`, `separators=(",", ":")` to guarantee identical byte representation for identical content, preventing Prompt Caching misses due to serialization differences
 

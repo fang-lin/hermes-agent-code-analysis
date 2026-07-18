@@ -30,7 +30,7 @@ Action it prescribes: `hermes cron list --all` → read `last_delivery_error` (t
 **Tier 1 (`reference/extending.md` §4).** Implement `BasePlatformAdapter`'s abstract methods; register via `ctx.register_platform()` in a plugin under `plugins/platforms/`; copy `plugins/platforms/telegram/` as a template; watch the deferred-load gotcha.
 
 **Tier 3 (read the real contract — and a real lesson).** The interface is the contract, so grep the ABC in the actual checkout:
-- `grep -rn "class BasePlatformAdapter" gateway/platforms/` → `base.py:2253`.
+- `grep -rn "class BasePlatformAdapter" gateway/platforms/` → `gateway/platforms/base.py:2253`.
 - Naive move: `awk 'NR>=2253 && NR<=3200 && /@abstractmethod/'` → shows **3** methods: `connect`/`disconnect`/`send`. **This is the trap.** The class is ~3,375 lines; scanning only the first ~1,000 lines misses the 4th.
 - Correct move: `grep -n "@abstractmethod" gateway/platforms/base.py` (whole file) → **4** methods; the 4th, `get_chat_info()`, is at `:5475` — ~2,600 lines below the other three. Ship without it and the subclass won't instantiate.
 

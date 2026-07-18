@@ -8,7 +8,7 @@ Turns the mental model into a source-navigable walkthrough: the request path, th
 ## 1. How a request enters / 请求怎么进来
 
 `hermes` (`pyproject.toml:308` → `hermes_cli.main:main`) is a 14,624-line argparse dispatcher.
-- `chat`/no-arg → `cmd_chat()` (`main.py:2216`) → `_resolve_use_tui()`: Ink TUI (Node subprocess + `tui_gateway/`) or classic TUI (`cli.py:main()`, pure Python).
+- `chat`/no-arg → `cmd_chat()` (`hermes_cli/main.py:2216`) → `_resolve_use_tui()`: Ink TUI (Node subprocess + `tui_gateway/`) or classic TUI (`cli.py:main()`, pure Python).
 - Classic `cli.py:main()` (`:15669`, Fire entry `:16184`) dispatches **six run modes** with early-return `if`s: gateway / worktree / list-tools / machine-readable (`--quiet`, tears off stream callbacks) / human single-query / interactive.
 - `web`/`dashboard` → FastAPI (`web_server.py`); `gateway` → `start_gateway()`.
 
@@ -22,7 +22,7 @@ All paths ultimately call the same `AIAgent.run_conversation()`. Interfaces are 
 1. Prologue: normalize input, resolve turn config (skill/model), image routing.
 2. **❹ Memory prefetch** — relevant snippets from the external memory provider, cached in `_ext_prefetch_cache` (reused all turn — 10 tool calls ≠ 10 queries). Injected into the **user message** (step ❼), not the system prompt.
 3. **❺ Plugin context** — hooks contribute context.
-4. **❼❽❾ Build the API request** from the internal `messages` list — three operations: **injection** (append ❹ memory + ❺ context to the end of the current user message; `:791-808` says explicitly "injected only for the API call, original messages never mutated, never persisted to session"), **cleanup** (sanitize), **format conversion** (per-provider).
+4. **❼❽❾ Build the API request** from the internal `messages` list — three operations: **injection** (append ❹ memory + ❺ context to the end of the current user message; `agent/conversation_loop.py:791-808` — the comment there says "API-call-time only — the original message in `messages` is never mutated, so nothing leaks into session persistence"; the append is `build_memory_context_block(_ext_prefetch_cache)`), **cleanup** (sanitize), **format conversion** (per-provider).
 5. Agent loop: LLM call → tool calls → tool results → repeat until done or `max_turns`. Tool dispatch = `handle_function_call()` (`model_tools.py:1019`).
 6. Epilogue (`turn_finalizer.py`): goal continuation, background self-improvement review trigger, trajectory save.
 
@@ -52,7 +52,7 @@ All paths ultimately call the same `AIAgent.run_conversation()`. Interfaces are 
 `gateway/run.py` (20,719 lines) runs one process serving 20 plugin + 9 built-in platforms.
 - **Deferred loading** (`platform_registry.py`) keeps heavy SDKs out of startup.
 - Inbound: platform adapter → user-authorization check (`_is_user_authorized`, `authz_mixin.py`) → `pre_gateway_dispatch` hook → AIAgent.
-- Resilience: independent per-platform reconnect (`_platform_reconnect_watcher`, exponential backoff); transient network errors swallowed at the event loop (`_is_transient_network_error`, `run.py:232`); stuck-loop suspension (same session active 3 restarts → suspend, `run.py:5954`).
+- Resilience: independent per-platform reconnect (`_platform_reconnect_watcher`, exponential backoff); transient network errors swallowed at the event loop (`_is_transient_network_error`, `gateway/run.py:232`); stuck-loop suspension (same session active 3 restarts → suspend, `gateway/run.py:5954`).
 - Outbound: streaming delivery, dead-target registry, message-length splitting.
 - The cron ticker and gateway housekeeping run on **separate daemon threads** (`cron-scheduler` vs `gateway-housekeeping`).
 
