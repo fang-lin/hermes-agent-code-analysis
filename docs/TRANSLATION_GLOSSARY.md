@@ -268,6 +268,30 @@
 | 强化学习 | reinforcement learning (RL) | RL 保留缩写 |
 | 无序并行 | unordered parallel | imap_unordered，谁先跑完先收 |
 | 批级并行 | batch-level parallelism | 并行粒度是 batch 而非 prompt |
+| 不性感的代码 | the unsexy code | 13 章标题；基础设施 |
+| 车队效应 | convoy effect | 固定退避导致的同步碰撞；官方文档原词 |
+| 声明式列协调 | declarative column reconciliation | _reconcile_columns 自动补列 |
+| schema 演化 | schema evolution | 声明式 + 版本链分工 |
+| 全文搜索 | full-text search | FTS5 |
+| 脱敏 | redaction | RedactingFormatter；secret 遮罩 |
+| 会话标签 | session tag | 日志行的 [session_id] |
+| 供应链硬化 | supply-chain hardening | 精确钉版 + 懒安装 + 顾问扫描 |
+| 投毒 | poisoning | 供应链投毒（Shai-Hulud worm 事件） |
+| 精确钉版 | exact version pinning | ==X.Y.Z |
+| 懒安装 | lazy install | 首次用到才装可选依赖 |
+| 供应链顾问 | supply-chain advisory | 已知投毒版本告警 |
+| 免密钥发布 | keyless publishing | OIDC trusted publishing，无长期 token |
+| 真边界 / 承重边界 | real boundary / load-bearing boundary | 沙箱隔离；对比启发式 |
+| 启发式（非边界） | heuristic (not a boundary) | 审批/脱敏/Skills Guard，防误触 |
+| 防手滑 / 防误触 | guard against slip-ups | 审批拦「不小心 rm -rf」 |
+| 单租户 | single-tenant | 信任模型：单用户个人 Agent |
+| 气密 / 密封 | hermetic | 测试隔离不变量 |
+| 三级自愈 | three-tier self-healing | DB 损坏 FTS rebuild→去重→丢弃重建 |
+| fail-open | fail-open | 锁子系统出错时跳过压缩，保留原词 |
+| TTL 租约 | TTL lease | compression_locks 租约式互斥 |
+| 爆炸半径 | blast radius | 懒安装：可选依赖被投毒不连累其它 |
+| 结语 | Epilogue | 全书收尾 |
+| kawaii | kawaii | 日语借词，源码自用（display.py/skin_engine.py），保留原词不译 |
 | 卡死循环 / stuck loop | stuck loop | `_STUCK_LOOP_THRESHOLD`，保留原词 |
 | 洪泛控制 / Flood control | flood control | stream_consumer 限速降级，源码原词 |
 | Deliverable Mode | Deliverable Mode | 官方特性名，MEDIA: 标签变附件，专名大写保留 |

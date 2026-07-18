@@ -131,7 +131,7 @@ Expected: after an SSH reconnect, `hermes --tui` reattaches directly to the prev
 | Ink TUI disappears but there's nothing in the crash log | Another root cause: the TUI process itself was killed by mistake — the MCP orphan-reaping `killpg()` racing with slash-worker spawn (the pitfall recorded in the `tui_gateway/server.py:305` comment, fixed with `start_new_session=True`) | Confirm the version includes the fix; upgrade an old version |
 | Interrupt/steer behaves unexpectedly | The interrupt chain has a dedicated debug log | Check `~/.hermes/interrupt_debug.log` — both nodes, enqueue (`cli.py:13448`) and the actual `agent.interrupt()` trigger (`:12361`, including subagent interrupt state), are recorded |
 | `.worktrees/` directory won't clean up | That worktree has unpushed commits and was deliberately preserved by `_cleanup_worktree` | Push or confirm abandonment, then `git worktree remove --force` to clean manually |
-| Non-localhost Dashboard access keeps 401 | A non-loopback bind switches to OAuth/cookie authentication, and the ephemeral token is no longer the credential | See the dual-auth scheme in the "Web Dashboard" section; use 127.0.0.1 for local development |
+| Non-localhost Dashboard access keeps 401 | A non-loopback bind switches to OAuth/cookie authentication, and the ephemeral token is no longer the credential | See the dual-authentication scheme in the "Web Dashboard" section; use 127.0.0.1 for local development |
 
 > ⚠️ **The two meanings of "quiet" — the easiest trap to fall into**: the `cli.md` doc has a section called "Quiet Mode" saying "the CLI runs in quiet mode by default," which means **suppressing verbose tool logs and enabling kawaii animation feedback** (relative to `--verbose`). But the command-line `--quiet`/`-Q` flag is a completely different thing — it's **machine-readable mode**, turning off even the banner, spinner, and streaming render callbacks, emitting only the final reply (near `cli.py:16071`). The two share a name but are at different layers: one is "log quiet," the other is "output clean enough to feed a pipe."
 
@@ -262,7 +262,7 @@ flowchart LR
     SPIN -.->|"invalidate"| UI
 ```
 
-Failure mode: `process_loop` is wrapped in a try/except, so an error handling one message only logs a warning (`cli.py:15253`, "msg may be lost") without crashing the loop — the background thread dying means the whole interactive interface loses responsiveness, so this backstop is critical.
+Failure mode: `process_loop` is wrapped in a try/except, so an error handling one message only logs a warning (`cli.py:15253`, "msg may be lost") without crashing the loop — the background thread dying means the whole interactive interface loses responsiveness, so this safety net is critical.
 
 ### The Lifecycle of a Complete Turn: From Pressing Enter to UI Recovery
 
