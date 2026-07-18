@@ -61,9 +61,11 @@
 | 10 交互界面与运行模式 | ✅ 已翻 + 审核闭环（dual authentication/safety net；kawaii 保留原词） |
 | 11 Cron 调度 | ✅ 已翻 + 审核闭环（daemon thread/liveness-based/Profile 大小写） |
 | 12 批量运行与轨迹生成 | ✅ 已翻 + 审核闭环（降级≠回退、Terminal Backends 对齐 03 章标题） |
-| 13 工程实践 | ✅ 已翻（含全书结语），🔵 translation-reviewer 审核中 |
-| 14 桌面应用 | ✅ 已翻（ZH 源修 67→33 模块，经源码核实），🔵 translation-reviewer 审核中 |
+| 13 工程实践 | ✅ 已翻 + 审核闭环（含全书结语；advisory/config key/中文搜索示例；防手滑→fat-finger 入词库） |
+| 14 桌面应用 | ✅ 已翻 + 审核闭环（ZH 源修 67→33 模块经源码核实；无 ❌，3 处措辞打磨） |
 | 98 / 99 | — 不译（保中文） |
+
+**英文翻译收官（2026-07-18）**：00–14 共 15 篇全部翻译完毕 + translation-reviewer 逐篇审核闭环。所有审核结构性零走样（段落数/file:line/数字/Mermaid ID 全对齐），发现集中在术语一致性微修，逐条二次验证后采纳。翻译过程反向暴露并修正 2 处**中文源**错误：08 章「会话流→对话流」（经 ch02:198 二次验证为对话级注入）、14 章「67→33 纯函数模块」（经源码 `ls apps/desktop/electron/*.cjs` 核实）。中英双语文档全部就绪。
 
 ---
 
