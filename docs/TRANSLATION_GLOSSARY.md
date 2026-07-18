@@ -166,6 +166,16 @@
 | 规整化 | canonicalize / normalize | WhatsApp JID/LID 规整化 |
 | 消息容器 | message envelope | MessageEvent |
 | 富媒体 | rich media | 图片/语音/视频 |
+| 协议适配 | protocol adaptation | ACP/MCP，章节标题 Protocol Adaptation Layer |
+| 编辑审批 | edit approval | ACP edit_approval.py |
+| 会话血统追踪 | session provenance tracking | acp_adapter/provenance.py |
+| 血统 / 血统链 | provenance / provenance chain | 压缩换头的会话 ID 链 |
+| 敏感路径 | sensitive path | .env/.ssh 始终询问 |
+| 换头 | head rotation | 压缩后开新 session head |
+| 前身项目 | predecessor project | OpenClaw |
+| 出站 / 入站 | outbound / inbound | messages_send 出站通路 |
+| 事件桥 | event bridge | EventBridge |
+| 游标 | cursor | events_poll after_cursor |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
