@@ -238,7 +238,7 @@ flowchart TD
 
 Resolution is attempted in the following priority order, stopping on the first hit:
 
-1. **MoA virtual provider** (`runtime_provider.py:1528`) — when `provider=moa`, it directly returns the `moa://local` virtual triple; the real multi-model aggregation happens inside the Agent loop (Chapter 02)
+1. **MoA virtual provider** (`runtime_provider.py:1528`) — when `provider=moa`, it directly returns the `moa://local` virtual triple; the real Mixture of Agents (MoA) aggregation happens inside the Agent loop (Chapter 02)
 2. **Azure Anthropic short-circuit** (`runtime_provider.py:1543`) — when `provider=anthropic` and `base_url` contains `azure.com`, it directly returns `anthropic_messages` mode
 3. **Azure Foundry** (`runtime_provider.py:1563`) — when the user configured `provider: azure-foundry`, it takes the Azure-specific resolution (supporting Entra ID keyless auth)
 4. **Vertex AI** (`runtime_provider.py:1583`) — an OAuth2-token-type Provider: it mints a short-lived access token on each call and uses it as the api_key. The comment specifically emphasizes that the credential file path **must never** flow into the credential pool or the generic api_key resolver — that would send the file path out as a static key
@@ -285,7 +285,7 @@ The five questions above cover hermes_cli's main-line functionality. But two mor
 
 #### How Do the Agent Thread and the TUI Thread Coordinate?
 
-The Agent's tool system runs on a background thread, but some operations require user interaction — clarifying a question, approving a dangerous command, entering an API key. User interaction happens in prompt_toolkit's main-thread event loop. How do the two threads coordinate?
+The Agent's tool system runs on a daemon thread, but some operations require user interaction — clarifying a question, approving a dangerous command, entering an API key. User interaction happens in prompt_toolkit's main-thread event loop. How do the two threads coordinate?
 
 `callbacks.py` (242 lines) solves this with a classic pattern: three callback functions (`clarify_callback()`, `approval_callback()`, `prompt_for_secret()`) all set CLI state → have the TUI refresh the interface → block on a `queue.Queue` waiting for the user's response, polling once a second to check for timeout. Using a queue avoids lock contention over shared state.
 
