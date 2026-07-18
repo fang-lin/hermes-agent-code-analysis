@@ -66,7 +66,6 @@
 | 静音检测 | silence detection | |
 | 模态状态机 | modal state machine | 经典 TUI 输入框语境 |
 | 皮肤 | skin | |
-| 破题段 | （文档结构词，不直译，按英文写作习惯处理开篇段） | |
 | 使用指南 | Usage Guide | 章节小标题 |
 | 架构与实现 | Architecture & Implementation | 章节小标题 |
 | 常见场景 | Common Scenarios | |
