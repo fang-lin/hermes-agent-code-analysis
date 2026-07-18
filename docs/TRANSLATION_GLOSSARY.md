@@ -232,6 +232,27 @@
 | 双鉴权 | dual authentication | loopback token vs OAuth cookie |
 | 安全模式库 | security-pattern library | `plugins/security-guidance/`；与「威胁模式库 threat-pattern library」是不同概念（安全≠威胁），勿混 |
 | 会话四件套 | session quartet | `on_session_start/end/finalize/reset` 四个钩子；见总规则 7 |
+| 看门狗 | watchdog | 监控脚本「没事就不出声」 |
+| 宽限窗口 | grace window | 宕机重启后错过任务的容忍窗口 |
+| 唤醒门控 | wake gate | pre-check 脚本决定要不要唤醒 LLM |
+| 至多执行一次 | at-most-once | 先推进 next_run 再执行 |
+| 先推进再执行 | advance-then-execute | tick 顺序：先推进 next_run_at 再跑任务 |
+| 静默快进 | silent fast-forward | 超出 grace window 的任务不补跑、直接快进到下个周期 |
+| 沉默信号 / [SILENT] | silence signal | `[SILENT]` 抑制投递；保留原标记不译 |
+| 活性超时 / 基于活性的超时 | liveness-based timeout | 按「无活动时长」而非总运行时长判超时 |
+| 心跳自检 | heartbeat self-check | ticker 每轮写心跳文件供诊断 |
+| 防漂移 / 任务快照 | drift prevention / job snapshot | provider_snapshot/model_snapshot 锁定创建时的解析结果 |
+| 自动化蓝图 | automation blueprint | 参数化任务模板目录 |
+| 调度器 Provider | scheduler Provider | 可插拔的触发源接口 |
+| 生命周期守卫 | lifecycle guard | 拦截任务在体内 restart gateway 的死循环 |
+| 运行认领 / 触发认领 | run claim / fire claim | 防 mid-run 重复触发 |
+| 递归守卫 | recursion guard | 禁 cronjob 工具防任务里再建任务 |
+| 原子写入 | atomic write | 临时文件+fsync+rename |
+| 跨进程文件锁 | cross-process file lock | flock / .tick.lock |
+| 真相源 | source of truth | jobs.json 单文件真相源 |
+| 热加载 | hot reload | 改 provider key 不重启 gateway 即生效 |
+| 多级流水线 | multi-stage pipeline | context_from 串任务 |
+| 注入扫描 | injection scan | prompt injection / 数据外泄检测 |
 | 卡死循环 / stuck loop | stuck loop | `_STUCK_LOOP_THRESHOLD`，保留原词 |
 | 洪泛控制 / Flood control | flood control | stream_consumer 限速降级，源码原词 |
 | Deliverable Mode | Deliverable Mode | 官方特性名，MEDIA: 标签变附件，专名大写保留 |
