@@ -53,11 +53,41 @@ $refs
 EOF
 
 echo
+# --- CONTENT check: does each cited line actually contain the claimed symbol? ---
+# Path-existence (above) can't catch a right-file/wrong-line anchor (the F1 class).
+# The manifest anchors.txt pins file|line|token; here we grep the token and report drift.
+MAN="$SKILL_DIR/scripts/anchors.txt"
+cerr=0; cdrift=0; cok=0
+if [ -f "$MAN" ]; then
+  echo "content check (symbol-at-line, from anchors.txt):"
+  while IFS='|' read -r cf cl tok; do
+    case "$cf" in ''|\#*) continue;; esac
+    [ -z "$tok" ] && continue
+    if [ ! -f "$ROOT/$cf" ]; then echo "  ERROR $cf — file missing"; cerr=$((cerr+1)); continue; fi
+    # nearest line where the token appears
+    near="$(grep -nF "$tok" "$ROOT/$cf" 2>/dev/null | cut -d: -f1 | awk -v L="$cl" 'BEGIN{best=""} {d=$1-L; if(d<0)d=-d; if(best==""||d<bd){bd=d;best=$1}} END{if(best!="")print best" "bd}')"
+    if [ -z "$near" ]; then
+      echo "  ERROR $cf:$cl — token not found: '$tok' (symbol renamed/removed?)"; cerr=$((cerr+1))
+    else
+      set -- $near; aline="$1"; d="$2"
+      if [ "$d" -le 30 ]; then cok=$((cok+1))
+      else echo "  DRIFT $cf:$cl — '$tok' actually at :$aline (Δ$d) — re-pin the anchor"; cdrift=$((cdrift+1)); fi
+    fi
+  done < "$MAN"
+  echo "  content: ok $cok · drift $cdrift · error $cerr"
+else
+  echo "  (no anchors.txt manifest — skipping content check)"
+fi
+
+echo
 # Secondary: flag ambiguous bare :line refs (a filename got dropped — the F1 class).
 bare="$(grep -rhoE '\`:[0-9]+' "$SKILL_DIR"/SKILL.md "$SKILL_DIR"/reference/*.md 2>/dev/null | sort -u | wc -l | tr -d ' ')"
 [ "$bare" != "0" ] && echo "  note: $bare bare \`:NNN\` ref(s) present — fine only if a filename precedes them on the same line; otherwise add the filename."
 
 echo
-echo "resolved: $ok   need-prefix (WARN): $warn   missing (ERROR): $err"
-[ "$err" -eq 0 ] && echo "OK — every path resolves." || echo "FAIL — fix the ERROR lines above."
-exit $([ "$err" -eq 0 ] && echo 0 || echo 1)
+echo "path:    resolved $ok · need-prefix $warn · missing $err"
+echo "content: ok ${cok:-0} · drift ${cdrift:-0} · error ${cerr:-0}"
+fail=$(( err + ${cerr:-0} ))
+[ "$fail" -eq 0 ] && echo "OK — every path resolves and every cited line contains its claimed symbol." \
+                  || echo "FAIL — fix the ERROR lines above."
+exit $([ "$fail" -eq 0 ] && echo 0 || echo 1)

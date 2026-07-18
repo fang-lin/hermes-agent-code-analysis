@@ -1,0 +1,28 @@
+# Anchor manifest: file|cited_line|expected_token — verified against hermes v0.18.2 (9de9c25f6).
+# check-anchors.sh greps <token> in <file> and reports how far the nearest hit is from <cited_line>.
+# This is the CONTENT check (does the cited line actually contain what the skill claims), on top of
+# the path-existence check. Every file:line anchor the skill quotes should have a row here.
+pyproject.toml|308|hermes_cli.main
+hermes_cli/main.py|2216|def cmd_chat
+hermes_cli/main.py|340|_apply_profile_override
+run_agent.py|393|class AIAgent
+agent/conversation_loop.py|791|Inject ephemeral context
+model_tools.py|1019|def handle_function_call
+model_tools.py|1175|skip_pre_tool_call_hook
+gateway/run.py|232|_is_transient_network_error
+gateway/run.py|5954|_STUCK_LOOP_THRESHOLD
+hermes_cli/config.py|226|user_mtime_ns
+hermes_cli/config.py|1027|max_verify_nudges
+hermes_cli/config.py|5395|def migrate_config
+tools/approval.py|366|HARDLINE_PATTERNS
+tools/approval.py|448|sudo password guessing
+tools/approval.py|547|DANGEROUS_PATTERNS
+gateway/config.py|347|class SessionResetPolicy
+cli.py|13448|interrupt_debug.log
+hermes_cli/auth.py|447|PROVIDER_REGISTRY
+hermes_cli/auth.py|861|HERMES_OAUTH_TRACE
+hermes_cli/auth.py|1048|_auth_store_lock
+tools/registry.py|134|_CHECK_FN_TTL_SECONDS
+hermes_cli/plugins.py|135|VALID_HOOKS
+hermes_cli/plugins.py|812|NOTE ON TIMING
+gateway/platforms/base.py|2253|class BasePlatformAdapter
