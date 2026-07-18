@@ -44,23 +44,30 @@ Runtime footprint: `~/.hermes/` holds `config.yaml`, `state.db` (sessions, SQLit
 
 ---
 
-## Getting depth — fetch the full analysis on demand / 按需取全文
+## Progressive workflow — scale depth to the problem / 渐进式:按难度逐层深入
 
-The full 15-chapter teardown lives at a public repo. Fetch only when the task needs precise anchors or a subsystem walkthrough; otherwise the routing + invariants here suffice.
+Do not front-load everything. Climb only as far as the problem needs — most tasks stop at Tier 1. 大多数任务停在第 1 层;越难越往下走,最深一层是**去读 hermes 真源码**。
 
-- **One chapter (light):**
-  `curl -fsSL https://raw.githubusercontent.com/fang-lin/hermes-agent-code-analysis/main/docs/en/NN-slug.md`
-  (Chinese: `docs/zh/…`; en/ slugs are ASCII, prefer them for fetching.)
-- **Whole repo (broad / cross-chapter):**
-  `git clone https://github.com/fang-lin/hermes-agent-code-analysis`
-  Docs are markdown only (~hundreds of KB); the hermes source itself is not included.
-- **No network / restricted:** fall back to the mental model + invariants here — they carry the essentials.
+- **Tier 0 — this file (always loaded, offline).** Mental model + task routing + invariants. Enough to orient and to avoid the big mistakes. 定向 + 不犯错。
+- **Tier 1 — bundled reference sheets (this skill, `reference/`).** Read the one that matches the task:
+  - `reference/configuration.md` — config.yaml keys by section, env vars, Profiles, provider/auth. → setup/config tasks.
+  - `reference/debugging.md` — log-file map, diagnostic commands, the silent-failure catalog, symptom→cause→fix by subsystem. → debugging tasks.
+  - `reference/extending.md` — step-by-step recipes to add a tool/skill/platform/plugin-hook/provider/backend. → customization / secondary development.
+  - `reference/architecture.md` — request path, agent loop, caching invariant, subsystem→source map. → "how does it actually work" / where to look.
+  - `scripts/orient.sh [hermes-root]` — prints the installed version + key-file line-count drift vs the pinned anchors, so you know how much to distrust the line numbers. Run this first when working in an unfamiliar checkout.
+- **Tier 2 — the full 15-chapter analysis (fetch on demand).** For the *why* (design rationale, alternatives considered, failure modes) the code alone won't tell you:
+  - One chapter (light): `curl -fsSL https://raw.githubusercontent.com/fang-lin/hermes-agent-code-analysis/main/docs/en/NN-slug.md` (Chinese: `docs/zh/…`; en slugs are ASCII).
+  - Whole repo (broad/cross-chapter): `git clone https://github.com/fang-lin/hermes-agent-code-analysis` (markdown only, ~hundreds of KB).
+  - Slugs: `00-project-overview 01-infrastructure 02-agent-core 03-tool-system 04-skill-system 05-gateway 06-protocols 07-plugin-framework 08-builtin-plugins 09-kanban 10-interfaces-and-run-modes 11-cron-scheduling 12-batch-and-trajectories 13-engineering-practices 14-desktop-app`.
+- **Tier 3 — read the actual hermes source (the goal).** For anything the analysis doesn't fully answer, or when the checkout differs from v0.18.2: the routing table + subsystem→source map (in `architecture.md`) point you to the exact file/symbol/directory. `grep -n "def <symbol>\|class <symbol>"` to find the current line, read the function with its callers/callees, and solve from the ground truth. **The analysis is the map; the real source is the territory — this skill exists to get you to the right region of it fast.** 分析是地图,真源码是实地——这个 skill 的终点就是带你快速定位到该读的那段真源码。
 
-Chapter → `docs/en/` slug: `00-project-overview` · `01-infrastructure` · `02-agent-core` · `03-tool-system` · `04-skill-system` · `05-gateway` · `06-protocols` · `07-plugin-framework` · `08-builtin-plugins` · `09-kanban` · `10-interfaces-and-run-modes` · `11-cron-scheduling` · `12-batch-and-trajectories` · `13-engineering-practices` · `14-desktop-app`.
+No network / restricted: stay at Tier 0–1 (bundled); they carry the essentials.
 
 ---
 
 ## Task routing — where to look / 任务路由
+
+For operational depth, read the matching Tier-1 sheet first (config→`reference/configuration.md`, debug→`reference/debugging.md`, extend→`reference/extending.md`, how-it-works→`reference/architecture.md`). The table below gives the deep chapter + the exact source symbol to grep in the actual checkout.
 
 | Task / 任务 | Chapter | Start by grepping (in the actual checkout) |
 |---|---|---|
@@ -118,4 +125,4 @@ These are the non-obvious rules where a plausible-looking change quietly breaks 
 - Pinned to **v0.18.2 / `9de9c25f6`**. Before quoting or editing at a line number, `grep` the symbol in the actual checkout — line numbers drift.
 - A claim about "when a feature appeared" is version-sensitive; confirm against the target checkout's own history if it matters.
 - When unsure, read the relevant chapter (fetch on demand) rather than guessing — the chapters carry the full file:line-anchored reasoning.
-- Optional calibration: check the running version with `hermes --version`, and compare a couple of the key file line counts above against the checkout to gauge how much drift to expect.
+- Calibrate drift fast: run `scripts/orient.sh [hermes-root]` — it prints the installed version and the key-file line-count drift vs the pinned anchors, so you know upfront how much to distrust the line numbers.
