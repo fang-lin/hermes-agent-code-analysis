@@ -109,7 +109,7 @@ flowchart LR
 
 `HermesACPAgent` (`server.py:450`) inherits from `acp.Agent` and is the server-side implementation of the ACP protocol. It orchestrates five things — session lifecycle, message exchange, file-edit approval, tool-result formatting, and real-time updates. Each is a separate subsystem:
 
-1. **Session lifecycle** — `SessionManager` (`session.py:186`, a 664-line file) maintains a separate `AIAgent` instance for each editor connection. A session has three modes: `default` (standard conversation), `accept_edits` (auto-accept file edits **within the workspace directory and /tmp**, sensitive paths still ask), `dont_ask` (auto-accept this session's file edits, but with sensitive paths excepted — see "Sensitive Paths Always Ask" below)
+1. **Session lifecycle** — `SessionManager` (`session.py:186`, a 664-line file) maintains a separate `AIAgent` instance for each editor connection. A session has three modes: `default` (standard conversation), `accept_edits` (auto-accept file edits **within the workspace directory and /tmp**, sensitive paths still ask), `dont_ask` (auto-accept this session's file edits, but with sensitive paths excepted — see "Sensitive paths always ask" below)
 
 2. **Message exchange** — the editor sends user messages (possibly containing code context, file references, images), and `HermesACPAgent` converts them into a format AIAgent understands then calls `run_conversation()`. The Agent's reply (text + tool-call results) is converted back to ACP format and returned to the editor
 
@@ -137,7 +137,7 @@ The ACP server can serve multiple editor sessions at once. This is achieved thro
 
 #### ACP's Toolset Restriction
 
-ACP uses the dedicated `hermes-acp` toolset (`toolsets.py`), a **true subset** of the core toolset: the 49 core tools are cut to 29, and the 20 removed are all non-coding-scenario tools — `clarify` (the editor has its own interaction method), all 9 kanban tools, 4 Home Assistant tools, `computer_use`, `cronjob`, `image_generate`, `text_to_speech`, `read_terminal`/`close_terminal`. Zero additions — edit approval isn't a new tool but a transparent interception of existing `write_file`/`patch` calls (`model_tools.py:1214-1216` calls `maybe_require_edit_approval()`), and the tool schema the model sees is unchanged. (For clarity: `send_message` was never in any toolset — the comment at `toolsets.py:373` says outright that outbound platform messaging is handled outside the agent loop, and the agent doesn't get this tool.) On session establishment it also injects memory-Provider tools on demand (`inject_memory_provider_tools()`, `server.py:831/847`).
+ACP uses the dedicated `hermes-acp` toolset (`toolsets.py`), a **true subset** of the core toolset: the 49 core tools are cut to 29, and the 20 removed are all non-coding-scenario tools — `clarify` (the editor has its own interaction method), all 9 kanban tools, 4 Home Assistant tools, `computer_use`, `cronjob`, `image_generate`, `text_to_speech`, `read_terminal`/`close_terminal`. Zero additions — edit approval isn't a new tool but a transparent interception of existing `write_file`/`patch` calls (`model_tools.py:1214-1216` calls `maybe_require_edit_approval()`), and the tool schema the model sees is unchanged. (For clarity: `send_message` was never in any toolset — the comment at `toolsets.py:373` says outright that outbound platform messaging is handled outside the agent loop, and the agent doesn't get this tool.) On session establishment it also injects memory Provider tools on demand (`inject_memory_provider_tools()`, `server.py:831/847`).
 
 #### Session Provenance Tracking: Who Am I After a Compression Head Rotation
 
@@ -211,7 +211,7 @@ ACP targets the **editor↔coding-assistant** bidirectional interaction — need
 
 #### Why Doesn't MCP Serve Expose Agent Tools?
 
-Security considerations. MCP Serve's goal is to let an external AI read/write messages, not to have it directly execute commands on your machine. If it exposed the `terminal` or `write_file` tool, the external AI could bypass hermes-agent's security-approval mechanism and operate the filesystem directly. Message-level operations (via `messages_send`) go through the Gateway's full processing flow, including user authorization and command approval.
+Security considerations. MCP Serve's goal is to let an external AI read/write messages, not to have it directly execute commands on your machine. If it exposed the `terminal` or `write_file` tool, the external AI could bypass hermes-agent's security-approval mechanism and operate the filesystem directly. `messages_send`, by contrast, only reuses the Gateway's **outbound delivery surface** — it doesn't touch execution capabilities like terminal/file and doesn't trigger Agent execution (consistent with the "Security Boundary" section), so exposing it doesn't open a hole in the execution surface.
 
 ### Extension Points
 
