@@ -10,7 +10,7 @@ Turns the mental model into a source-navigable walkthrough: the request path, th
 `hermes` (`pyproject.toml:308` → `hermes_cli.main:main`) is a 14,624-line argparse dispatcher.
 - `chat`/no-arg → `cmd_chat()` (`hermes_cli/main.py:2216`) → `_resolve_use_tui()`: Ink TUI (Node subprocess + `tui_gateway/`) or classic TUI (`cli.py:main()`, pure Python).
 - Classic `cli.py:main()` (`:15669`, Fire entry `:16184`) dispatches **six run modes** with early-return `if`s: gateway / worktree / list-tools / machine-readable (`--quiet`, tears off stream callbacks) / human single-query / interactive.
-- `web`/`dashboard` → FastAPI (`web_server.py`); `gateway` → `start_gateway()`.
+- `web`/`dashboard` → FastAPI (`hermes_cli/web_server.py`); `gateway` → `start_gateway()`.
 
 All paths ultimately call the same `AIAgent.run_conversation()`. Interfaces are frontends; the routing is at the entry, not inside the Agent (ch01, ch10).
 
@@ -24,7 +24,7 @@ All paths ultimately call the same `AIAgent.run_conversation()`. Interfaces are 
 3. **❺ Plugin context** — hooks contribute context.
 4. **❼❽❾ Build the API request** from the internal `messages` list — three operations: **injection** (append ❹ memory + ❺ context to the end of the current user message; `agent/conversation_loop.py:791-808` — the comment there says "API-call-time only — the original message in `messages` is never mutated, so nothing leaks into session persistence"; the append is `build_memory_context_block(_ext_prefetch_cache)`), **cleanup** (sanitize), **format conversion** (per-provider).
 5. Agent loop: LLM call → tool calls → tool results → repeat until done or `max_turns`. Tool dispatch = `handle_function_call()` (`model_tools.py:1019`).
-6. Epilogue (`turn_finalizer.py`): goal continuation, background self-improvement review trigger, trajectory save.
+6. Epilogue (`agent/turn_finalizer.py`): goal continuation, background self-improvement review trigger, trajectory save.
 
 **What the LLM sees each call** (ch02 "Complete Message Structure"): system prompt (static — SKILL indexes, memory-static, tool defs) + conversation history + current user message (with ❹ prefetch + ❺ context appended). The static/dynamic split is deliberate — see the caching invariant.
 
@@ -35,23 +35,23 @@ All paths ultimately call the same `AIAgent.run_conversation()`. Interfaces are 
 ## 4. The reliability layer / 可靠性层 (ch02)
 
 - **Retry & backoff** — 4 branches: billing-type 402 rotates key immediately; aggregator upstream rate-limit falls back directly (skips the pool); transient network retries; stream-stale (180s no token, `HERMES_STREAM_STALE_TIMEOUT`) retries.
-- **Credential pool** (`credential_pool.py`) — multi-key rotation with cooldown tiers: 401→5min, 429→1h (`:113-115`); `dead` (revoked token) doesn't self-heal → re-login.
+- **Credential pool** (`agent/credential_pool.py`) — multi-key rotation with cooldown tiers: 401→5min, 429→1h (`:113-115`); `dead` (revoked token) doesn't self-heal → re-login.
 - **Fallback chain** — `fallback_model` chains across providers when one is down.
-- **MoA is fail-open** (`moa_loop.py`) — advisor/reference-model failure degrades to a labeled opinion, never interrupts the main path.
+- **MoA is fail-open** (`agent/moa_loop.py`) — advisor/reference-model failure degrades to a labeled opinion, never interrupts the main path.
 
 ## 5. Beyond the single loop / 超出单循环
 
 - **MoA (Mixture of Agents)** — reference models advise → aggregator synthesizes. Config `moa.presets`; virtual provider `moa://local`; managed by `hermes moa`. (Note: the old `moa` *tool* was removed; it's now an Agent-loop-layer mode.)
-- **Subagents** (`delegate_tool.py`) — split tasks horizontally; own `iteration_budget` (default 50, `delegation.max_iterations`), spawn depth cap, child timeout. Interrupt propagates recursively.
-- **Codex App-Server Runtime** (`codex_runtime.py`) — a **third** execution path: delegate a whole turn to the Codex app-server (besides the normal loop and MoA).
+- **Subagents** (`tools/delegate_tool.py`) — split tasks horizontally; own `iteration_budget` (default 50, `delegation.max_iterations`), spawn depth cap, child timeout. Interrupt propagates recursively.
+- **Codex App-Server Runtime** (`agent/codex_runtime.py`) — a **third** execution path: delegate a whole turn to the Codex app-server (besides the normal loop and MoA).
 - **Auxiliary model** — the unified scheduler for side tasks (background review, summaries); routed via `auxiliary.*`.
 - **LSP integration** (`agent/lsp/`) — after a code edit, real language-server diagnostics ("line 42: cannot find name 'foo'") come back in the tool result — editor-grade feedback without running lint.
 
 ## 6. The gateway path / 网关路径 (ch05)
 
 `gateway/run.py` (20,719 lines) runs one process serving 20 plugin + 9 built-in platforms.
-- **Deferred loading** (`platform_registry.py`) keeps heavy SDKs out of startup.
-- Inbound: platform adapter → user-authorization check (`_is_user_authorized`, `authz_mixin.py`) → `pre_gateway_dispatch` hook → AIAgent.
+- **Deferred loading** (`gateway/platform_registry.py`) keeps heavy SDKs out of startup.
+- Inbound: platform adapter → user-authorization check (`_is_user_authorized`, `gateway/authz_mixin.py`) → `pre_gateway_dispatch` hook → AIAgent.
 - Resilience: independent per-platform reconnect (`_platform_reconnect_watcher`, exponential backoff); transient network errors swallowed at the event loop (`_is_transient_network_error`, `gateway/run.py:232`); stuck-loop suspension (same session active 3 restarts → suspend, `gateway/run.py:5954`).
 - Outbound: streaming delivery, dead-target registry, message-length splitting.
 - The cron ticker and gateway housekeeping run on **separate daemon threads** (`cron-scheduler` vs `gateway-housekeeping`).
@@ -60,16 +60,16 @@ All paths ultimately call the same `AIAgent.run_conversation()`. Interfaces are 
 
 | Subsystem | Primary source | Deep chapter |
 |---|---|---|
-| CLI / config / auth / Profiles | `hermes_cli/` (`main.py`, `config.py`, `auth.py`, `commands.py`) | 01 |
-| Agent core / loop / caching / MoA | `run_agent.py`, `agent/`, `credential_pool.py`, `moa_loop.py`, `codex_runtime.py` | 02 |
-| Tools / dispatch / approval / backends | `model_tools.py`, `tools/registry.py`, `toolsets.py`, `approval.py`, `tools/environments/` | 03 |
-| Skills / Curator | `skills_tool.py`, `skills/`, `optional-skills/`, `background_review.py`, `turn_finalizer.py` | 04 |
+| CLI / config / auth / Profiles | `hermes_cli/main.py`, `hermes_cli/config.py`, `hermes_cli/auth.py`, `hermes_cli/commands.py` | 01 |
+| Agent core / loop / caching / MoA | `run_agent.py`, `agent/`, `agent/credential_pool.py`, `agent/moa_loop.py`, `agent/codex_runtime.py` | 02 |
+| Tools / dispatch / approval / backends | `model_tools.py`, `tools/registry.py`, `toolsets.py`, `tools/approval.py`, `tools/environments/` | 03 |
+| Skills / Curator | `tools/skills_tool.py`, `skills/`, `optional-skills/`, `agent/background_review.py`, `agent/turn_finalizer.py` | 04 |
 | Gateway / platforms | `gateway/run.py`, `gateway/platform_registry.py`, `plugins/platforms/` | 05 |
 | Protocols (ACP/MCP) | `acp_adapter/`, `mcp_serve.py` | 06 |
 | Plugin framework / hooks | `hermes_cli/plugins.py` (VALID_HOOKS, PluginContext) | 07 |
 | Built-in plugins | `plugins/` (memory / model-providers / platforms / observability / kanban) | 08 |
-| Kanban | `kanban/` (dispatcher / worker / orchestrator) | 09 |
-| Interfaces / TUI / skins / voice | `cli.py`, `tui_gateway/`, `hermes_cli/skin_engine.py`, `web_server.py`, `tools/voice_mode.py` | 10 |
+| Kanban | `plugins/kanban/` (dispatcher / worker / orchestrator) | 09 |
+| Interfaces / TUI / skins / voice | `cli.py`, `tui_gateway/`, `hermes_cli/skin_engine.py`, `hermes_cli/web_server.py`, `tools/voice_mode.py` | 10 |
 | Cron | `cron/scheduler.py`, `cron/jobs.py`, `cron/scheduler_provider.py`, `tools/cronjob_tools.py` | 11 |
 | Batch / trajectories | `batch_runner.py`, `trajectory_compressor.py`, `toolset_distributions.py`, `mini_swe_runner.py` | 12 |
 | Session DB / logging / atomic writes / security | `hermes_state.py`, `hermes_logging.py`, `agent/redact.py`, `utils.py`, `SECURITY.md` | 13 |

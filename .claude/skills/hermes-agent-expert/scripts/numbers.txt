@@ -1,0 +1,22 @@
+# Numeric claims — documented derivations (review-verified, NOT auto-counted).
+#
+# Why not in check-anchors.sh: numeric claims are falsifiable but a NAIVE one-liner count is
+# less reliable than the careful chapter analysis. Demonstrated: quick greps gave 8 / 10 / 9 for
+# the built-in adapters / hooks / backends where the correct answers are 9 / 23 / 7 — the crude
+# counter was wrong, not the skill. So an auto-check here would false-alarm. Instead each claim is
+# recorded with a REPRODUCIBLE derivation you can run and eyeball. Values verified against v0.18.2.
+#
+# format: claim | value | how to reproduce (run from the hermes source root) | status
+#
+20 plugin platforms      | 20 | ls -d plugins/platforms/*/ | wc -l                                   | AUTO-OK (clean)
+4 BasePlatformAdapter @abstractmethod | 4 | awk 'NR>=2253&&NR<=5627&&/@abstractmethod/' gateway/platforms/base.py | wc -l | AUTO-OK (clean)
+23 lifecycle hooks (VALID_HOOKS) | 23 | awk 'NR>=135{print} NR>135&&/^\}/{exit}' hermes_cli/plugins.py | grep -cE '^\s+"[a-z_]+",?' | AUTO-OK (clean)
+9 gateway built-in adapters | 9 | ls gateway/platforms/*.py ; count classes subclassing BasePlatformAdapter (weixin/yuanbao/qqbot/signal/whatsapp_cloud/bluebubbles + api_server/webhook/msgraph_webhook) | REVIEW (naive grep undercounts mixins) — see ch05/ch08
+69 registered tools      | 69 | count registry.register(...) across tools/ (some conditional) — see ch00/ch03; do not trust a raw grep -c | REVIEW
+7 execution backends     | 7  | the named BaseEnvironment subclasses local/docker/ssh/daytona/singularity/modal/… under tools/environments/ (dir has extra helper files) — see ch03 | REVIEW
+18 plugin categories     | 18 | subdirectory groups under plugins/ — see ch08 table | REVIEW
+15-step agent loop       | 15 | the numbered lifecycle in run_conversation — see ch02 | REVIEW (conceptual)
+203 hermes_cli files     | 203 | find hermes_cli -name '*.py' | wc -l (approx; excludes tests) — see ch01 | REVIEW
+# File line counts (run_agent.py 6013, cli.py 16184, gateway/run.py 20719, hermes_state.py 6409,
+# hermes_logging.py 789, cron/scheduler.py 3638, cron/jobs.py 2033, utils.py 546, model_tools.py 1375)
+# are checked by orient.sh (line-drift table) — not duplicated here.

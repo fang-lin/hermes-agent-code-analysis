@@ -72,7 +72,7 @@ For operational depth, read the matching Tier-1 sheet first (config→`reference
 
 | Task / 任务 | Chapter | Start by grepping (in the actual checkout) |
 |---|---|---|
-| Install / first-run / providers / auth | 01, 10 | `hermes_cli/main.py`, `hermes_cli/setup.py`, `auth.py` |
+| Install / first-run / providers / auth | 01, 10 | `hermes_cli/main.py`, `hermes_cli/setup.py`, `hermes_cli/auth.py` |
 | Configure (`config.yaml` keys) | subsystem ch + 01 | grep the key in source; `display.*`→10, `cron.*`→11, `stt/tts/voice.*`→10, `security.*`→03/13 |
 | Profiles / `HERMES_HOME` | 01 | `hermes_cli/` profile resolution |
 | Debug an agent hang / interrupt | 02, 10 | `agent.interrupt`, `~/.hermes/logs/interrupt_debug.log` |
@@ -86,7 +86,7 @@ For operational depth, read the matching Tier-1 sheet first (config→`reference
 | Add a plugin / lifecycle hook | 07, 08 | `hermes_cli/plugins.py` (`VALID_HOOKS`), PluginContext |
 | Custom interface / skin / voice | 10 | `hermes_cli/skin_engine.py`, `tools/voice_mode.py` |
 | Editor / MCP integration | 06 | `acp_adapter/`, `mcp_serve.py` |
-| Multi-agent orchestration | 09 | `kanban/` (dispatcher/worker/orchestrator) |
+| Multi-agent orchestration | 09 | `plugins/kanban/` (dispatcher/worker/orchestrator) |
 | Generate training data | 12 | `batch_runner.py`, `trajectory_compressor.py` |
 | Desktop app internals | 14 | `apps/desktop/electron/main.cjs`, `apps/shared/` |
 | Testing / security / supply chain | 13 | `tests/conftest.py`, `pyproject.toml`, `SECURITY.md` |
@@ -117,7 +117,7 @@ These are the non-obvious rules where a plausible-looking change quietly breaks 
 
 10. **RL training infra left the main repo (v0.14).** `batch_runner.py` → `trajectory_compressor.py` produce ShareGPT training data, but the RL *environments* (Atropos, `rl_cli`, `tool_call_parsers`) were moved to a separate repo. Don't hunt for RL training code in the main repo. — ch12. 中文:RL 训练环境已移出主仓,别在主仓找。
 
-11. **MoA (Mixture of Agents) is fail-open; memory injection is conversation-level.** If the advisor/reference model fails, MoA degrades to a labeled opinion without interrupting the main path. `MemoryManager` injects at API-call time into the current message and does **not** mutate the original message or persist to the session. — `moa_loop.py`, ch02/ch08. 中文:MoA 失败降级不中断;记忆是对话级注入、不进会话持久化。
+11. **MoA (Mixture of Agents) is fail-open; memory injection is conversation-level.** If the advisor/reference model fails, MoA degrades to a labeled opinion without interrupting the main path. `MemoryManager` injects at API-call time into the current message and does **not** mutate the original message or persist to the session. — `agent/moa_loop.py`, ch02/ch08. 中文:MoA 失败降级不中断;记忆是对话级注入、不进会话持久化。
 
 ---
 
@@ -128,4 +128,4 @@ These are the non-obvious rules where a plausible-looking change quietly breaks 
 - A claim about "when a feature appeared" is version-sensitive; confirm against the target checkout's own history if it matters.
 - When unsure, read the relevant chapter (fetch on demand) rather than guessing — the chapters carry the full file:line-anchored reasoning.
 - Calibrate drift fast: run `scripts/orient.sh [hermes-root]` — it prints the installed version and the key-file line-count drift vs the pinned anchors. **The line-count drift is the reliable signal, not the version string**: a checkout can report `v0.18.0` yet have source line-for-line identical to the v0.18.2 anchors (drift 0). Trust the drift table over `hermes --version`.
-- Validate all anchors mechanically: run `scripts/check-anchors.sh [hermes-root]` — it verifies every `file:line` reference in this skill points to a real file (and flags ambiguous bare `:line` refs). Run it after editing the skill or when pinning a new version.
+- Validate all anchors mechanically: run `scripts/check-anchors.sh [hermes-root]` — it verifies all six falsifiable-anchor types (paths, file:line symbol-at-line via `scripts/anchors.txt`, env vars referenced, CLI subcommands registered, config keys present, symbols defined) against the checkout. ~200 anchors, `ERROR 0` on v0.18.2. Run it after editing the skill or re-pinning. Numeric claims are documented with reproducible derivations in `scripts/numbers.txt` (review-verified, deliberately not auto-counted — a naive count is less reliable than the analysis). "Anchor" = a concrete pointer grep can give a yes/no on; the *judgments* (the "why") are not anchors and need review, not a script.

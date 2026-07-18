@@ -1,13 +1,13 @@
 # Configuration Reference / 配置参考
 
-The authoritative source is the running `~/.hermes/config.yaml` (~1,440 lines of tunable params) and the config schema in source (`config.py`, `DEFAULT_CONFIG`). This sheet catalogs the keys that matter, by section — **grep the key in the actual checkout to see its exact default and validation**. Pinned to v0.18.2.
-本页按段罗列高频配置键。权威来源是本机 `config.yaml` 与源码 `config.py`;要精确默认值就 grep 键名。
+The authoritative source is the running `~/.hermes/config.yaml` (~1,440 lines of tunable params) and the config schema in source (`hermes_cli/config.py`, `DEFAULT_CONFIG`). This sheet catalogs the keys that matter, by section — **grep the key in the actual checkout to see its exact default and validation**. Pinned to v0.18.2.
+本页按段罗列高频配置键。权威来源是本机 `config.yaml` 与源码 `hermes_cli/config.py`;要精确默认值就 grep 键名。
 
 ---
 
 ## 0. How config loads / 配置怎么加载(先懂这个)
 
-- File: `~/.hermes/config.yaml` (user) merged over a managed file over `DEFAULT_CONFIG`. `load_config()` in `config.py`.
+- File: `~/.hermes/config.yaml` (user) merged over a managed file over `DEFAULT_CONFIG`. `load_config()` in `hermes_cli/config.py`.
 - **Signature cache**: keyed by mtime_ns/size of user+managed files + a snapshot of referenced env vars (`hermes_cli/config.py:226-231`). A running gateway holds its own cache → **edit had no effect ⇒ restart the gateway**.
 - **Syntax error = all overrides lost**: falls back to `DEFAULT_CONFIG`, backs up to `config.yaml.corrupt.<ts>.bak`, warns, rebuilds (`hermes_cli/config.py:42/96`).
 - **Programmatic edits must use `atomic_roundtrip_yaml_update`** (ruamel roundtrip) to preserve the user's comments — a plain `yaml.dump` wipes them. `migrate_config()` (`hermes_cli/config.py:5395`) is incremental, never deletes fields.
@@ -123,4 +123,4 @@ Each Profile is a fully isolated `~/.hermes/profiles/<name>/` with its own `conf
 ---
 
 ## Where to read the real source / 去哪读真源码
-Config schema & loading: `config.py` (grep the key). Auth/providers: `auth.py`, `PROVIDER_REGISTRY`. For the exhaustive per-key default and comment, the running `~/.hermes/config.yaml` is itself the reference (managed section carries inline docs). Deep dive: fetch `docs/en/01-infrastructure.md` (config/auth) and the relevant subsystem chapter.
+Config schema & loading: `hermes_cli/config.py` (grep the key). Auth/providers: `hermes_cli/auth.py`, `PROVIDER_REGISTRY`. For the exhaustive per-key default and comment, the running `~/.hermes/config.yaml` is itself the reference (managed section carries inline docs). Deep dive: fetch `docs/en/01-infrastructure.md` (config/auth) and the relevant subsystem chapter.

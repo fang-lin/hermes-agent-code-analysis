@@ -34,7 +34,7 @@ Action it prescribes: `hermes cron list --all` → read `last_delivery_error` (t
 - Naive move: `awk 'NR>=2253 && NR<=3200 && /@abstractmethod/'` → shows **3** methods: `connect`/`disconnect`/`send`. **This is the trap.** The class is ~3,375 lines; scanning only the first ~1,000 lines misses the 4th.
 - Correct move: `grep -n "@abstractmethod" gateway/platforms/base.py` (whole file) → **4** methods; the 4th, `get_chat_info()`, is at `:5475` — ~2,600 lines below the other three. Ship without it and the subclass won't instantiate.
 
-**Resolution.** Subclass `BasePlatformAdapter`, implement all **4** abstract methods (`connect`/`disconnect`/`send`/`get_chat_info`), override optional capability methods (`send_image`, `edit_message`, …) only for what your platform supports, add a `register(ctx)` calling `ctx.register_platform(...)`, and structure it like `plugins/platforms/telegram/` (`adapter.py` + `plugin.yaml`). *The skill got you to the right file in one grep; the "scan the whole definition" discipline caught the far-flung 4th method.*
+**Resolution.** Subclass `BasePlatformAdapter`, implement all **4** abstract methods (`connect`/`disconnect`/`send`/`get_chat_info`), override optional capability methods (`send_image`, `edit_message`, …) only for what your platform supports, add a `register(ctx)` calling `ctx.register_platform(...)`, and structure it like `plugins/platforms/telegram/` (`plugins/platforms/telegram/adapter.py` + `plugin.yaml`). *The skill got you to the right file in one grep; the "scan the whole definition" discipline caught the far-flung 4th method.*
 
 ---
 

@@ -37,7 +37,7 @@ Each line carries a ` [session_id]` tag → `grep '\[<id>\]' agent.log` pulls on
 
 | Command | Shows |
 |---|---|
-| `hermes doctor` | dozen+ checks (version consistency, certs, gateway service, managed scope, Provider health), OK/WARN/FAIL (`doctor.py`) |
+| `hermes doctor` | dozen+ checks (version consistency, certs, gateway service, managed scope, Provider health), OK/WARN/FAIL (`hermes_cli/doctor.py`) |
 | `hermes doctor --ack <id>` | dismiss a supply-chain advisory permanently |
 | `hermes tools` | per-tool enable status + why a tool is unavailable. **TTY-only** — errors `requires an interactive terminal` through a pipe/cron/SSH-non-tty; in non-interactive envs use `hermes doctor` or grep `tools/registry.py` directly. |
 | `hermes plugins list` | discovered / enabled / **deferred**; the `error` field = rejection reason |

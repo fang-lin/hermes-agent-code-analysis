@@ -26,3 +26,16 @@ tools/registry.py|134|_CHECK_FN_TTL_SECONDS
 hermes_cli/plugins.py|135|VALID_HOOKS
 hermes_cli/plugins.py|812|NOTE ON TIMING
 gateway/platforms/base.py|2253|class BasePlatformAdapter
+# resolved bare :line refs (filename taken from same line in the skill)
+cli.py|15669|def main
+cli.py|16184|fire.Fire
+cli.py|12361|interrupt_debug.log
+run_agent.py|3433|def close
+agent/credential_pool.py|113|EXHAUSTED_TTL_401_SECONDS
+gateway/platforms/base.py|2863|async def connect
+gateway/platforms/base.py|5475|get_chat_info
+cron/jobs.py|1073|last_delivery_error
+cron/jobs.py|1351|last_delivery_error
+cron/scheduler.py|1308|def _deliver_result
+cron/scheduler.py|3355|_deliver_result
+cron/scheduler.py|3080|last_status

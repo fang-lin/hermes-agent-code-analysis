@@ -13,7 +13,7 @@ No code. A skill is a `SKILL.md` (frontmatter + markdown body) that teaches the 
 - **Where**: `~/.hermes/skills/<category>/<name>/SKILL.md`, or `hermes skills install <name>` from the Hub.
 - **Frontmatter**: `name`, `description`, optional `conditions`, `required_environment_variables`, `required_credential_files`.
 - **Gotchas**: frontmatter >4000 chars is truncated (name degrades to the directory name); `conditions`/`fallback_for_toolsets` can silently hide it; two cache layers (disk mtime + in-process) — restart the agent or `clear_skills_system_prompt_cache()` after edits; the Curator may archive long-unused built-ins to `.archive/`.
-- **Source**: `skills_tool.py`, `skills/`, `optional-skills/`. Deep: `docs/en/04-skill-system.md`.
+- **Source**: `tools/skills_tool.py`, `skills/`, `optional-skills/`. Deep: `docs/en/04-skill-system.md`.
 
 ## 2. A Tool / 加工具
 - **Built-in**: create `tools/<name>.py` → define schema + handler → `registry.register(...)` declaring the schema, handler, and owning **toolset**.
@@ -31,14 +31,14 @@ No code. A skill is a `SKILL.md` (frontmatter + markdown body) that teaches the 
 ## 4. A messaging platform / 加消息平台
 Platforms are **plugins** now (since v0.15), not gateway built-ins.
 - **Base class**: `class BasePlatformAdapter(ABC)` — `gateway/platforms/base.py:2253` (a ~3,375-line class). It has **4 `@abstractmethod`** you MUST implement: `connect()`, `disconnect()`, `send()` (clustered ~`:2863-2888`) and **`get_chat_info()` (`:5475`)**. ⚠️ The 4th sits ~2,600 lines below the other three — a capped grep will show only 3 and you'll ship a class that won't instantiate. **Scan the whole class** (`grep -n "@abstractmethod" gateway/platforms/base.py`). Everything else (`send_image`/`edit_message`/`send_draft`/`send_typing`/capability properties) has sensible defaults — override only what your platform supports.
-- **Template**: copy an existing plugin, e.g. `plugins/platforms/telegram/` — `adapter.py` (the `BasePlatformAdapter` subclass) + `plugin.yaml` + a `register(ctx)` that calls `ctx.register_platform(...)`.
+- **Template**: copy an existing plugin, e.g. `plugins/platforms/telegram/` — `plugins/platforms/telegram/adapter.py` (the `BasePlatformAdapter` subclass) + `plugin.yaml` + a `register(ctx)` that calls `ctx.register_platform(...)`.
 - **Gotchas**: bundled platforms are **deferred-loaded** (import on first use: gateway start / cron delivery / setup) → a missing optional SDK makes it silently drop from the registry (`Deferred load of platform '<name>' failed` in `agent.log`). Don't add platform logic to gateway core.
 - **Source**: `gateway/platforms/base.py` (the ABC), `gateway/platform_registry.py`, `plugins/platforms/<name>/`. Deep: `docs/en/05-gateway.md`, `08-builtin-plugins.md`.
 
 ## 5. A model Provider / 加模型供应商
 - Drop a plugin under `plugins/model-providers/` → it auto-expands `PROVIDER_REGISTRY` (`hermes_cli/auth.py:447`).
 - For a simple provider, no plugin needed — just add to the `providers:` section of `config.yaml`.
-- **Source**: `auth.py`, `PROVIDER_REGISTRY`. Deep: `docs/en/08-builtin-plugins.md`.
+- **Source**: `hermes_cli/auth.py`, `PROVIDER_REGISTRY`. Deep: `docs/en/08-builtin-plugins.md`.
 
 ## 6. A memory / context engine / 加记忆·上下文引擎
 - **Memory**: implement the `MemoryProvider` ABC (19 methods) and inject via a plugin. `MemoryManager` accepts **one** external provider (conflict-avoidance). Set `memory.provider`. Injection is conversation-level (per API call), not session-persisted (ch02/ch08).
