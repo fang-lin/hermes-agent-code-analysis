@@ -17,7 +17,7 @@
 3. **数字保真**：所有数字（行数、次数、阈值、版本号、端口）原样照搬，不四舍五入、不改写。
 4. **官方文档链接**：`https://hermes-agent.nousresearch.com/docs/...` 路径原样保留；链接的显示文字（如「延伸阅读」）译成英文。
 5. **保持术语单复数/大小写一致**：见下表「说明」列的约定。
-6. **代码块里的「自然语言字符串值」可译**：CLI 示例里作为演示内容的自然语言字符串值（如 `--title "实现用户登录 API"` 的标题、`--summary`/`body=` 的正文）译成英文，方便英文读者理解——这不违反规则 2，因为改的是给人读的示例内容，不是命令结构、标识符、flag 名。但字符串若本身是标识符/slug/枚举值（如 `--assignee backend-dev`、`board=default`），保持原样不译。
+6. **代码块里的「自然语言字符串值」可译**：CLI 示例里作为演示内容的自然语言字符串值（如 `--title "实现用户登录 API"` 的标题、`--summary`/`body=` 的正文）译成英文，方便英文读者理解——这不违反规则 2，因为改的是给人读的示例内容，不是命令结构、标识符、flag 名。但字符串若本身是标识符/slug/枚举值（如 `--assignee backend-dev`、`board=default`），保持原样不译。**例外**：当示例本身就是为了演示「中文可搜索」这类论断时（如 `/session_search docker 部署` 佐证 CJK 全文搜索），保留中文原词并加英文注解（`部署 = "deployment"`），否则译成英文会让示例反证不了论点。
 7. **「N 件套」译成集合名词**：中文口语「三件套/四件套」指一组固定钩子/组件时，译成 trio/quartet 等集合名词（看板三件套→Kanban trio、会话四件套→session quartet），而非 "three-piece set"。
 
 ## 逐词表
@@ -277,13 +277,13 @@
 | 会话标签 | session tag | 日志行的 [session_id] |
 | 供应链硬化 | supply-chain hardening | 精确钉版 + 懒安装 + 顾问扫描 |
 | 投毒 | poisoning | 供应链投毒（Shai-Hulud worm 事件） |
-| 精确钉版 | exact version pinning | ==X.Y.Z |
+| 精确钉版 | exact (version) pinning | ==X.Y.Z；可按语法屈折为 exactly pinned / exact-pinned / pin exact versions，`==X.Y.Z` 在旁时 "version" 可省 |
 | 懒安装 | lazy install | 首次用到才装可选依赖 |
 | 供应链顾问 | supply-chain advisory | 已知投毒版本告警 |
 | 免密钥发布 | keyless publishing | OIDC trusted publishing，无长期 token |
 | 真边界 / 承重边界 | real boundary / load-bearing boundary | 沙箱隔离；对比启发式 |
 | 启发式（非边界） | heuristic (not a boundary) | 审批/脱敏/Skills Guard，防误触 |
-| 防手滑 / 防误触 | guard against slip-ups | 审批拦「不小心 rm -rf」 |
+| 防手滑 / 防误触 | fat-finger protection / fat-fingering | 英语固定习语，比直译 guard against slip-ups 更地道；审批拦「不小心 rm -rf」 |
 | 单租户 | single-tenant | 信任模型：单用户个人 Agent |
 | 气密 / 密封 | hermetic | 测试隔离不变量 |
 | 三级自愈 | three-tier self-healing | DB 损坏 FTS rebuild→去重→丢弃重建 |

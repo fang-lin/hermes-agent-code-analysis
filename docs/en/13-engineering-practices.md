@@ -33,7 +33,7 @@ hermes --resume <session_id>         # resume a session
 hermes --continue                    # resume the most recent
 ```
 
-Sessions support full-text search (including Chinese) — `/session_search docker deployment` can find content in past conversations.
+Sessions support full-text search (including Chinese) — `/session_search docker 部署` (部署 = "deployment") can find content in past conversations.
 
 ### Read Logs to Troubleshoot
 
@@ -50,7 +50,7 @@ With multiple sessions concurrent, each log line carries a `[session_id]` tag, c
 ### Dependencies and Supply Chain
 
 ```bash
-hermes doctor                        # check the environment, including the supply-chain advisor (alerts for known-poisoned versions)
+hermes doctor                        # check the environment, including the supply-chain advisory (alerts for known-poisoned versions)
 hermes doctor --ack <advisory-id>    # acknowledge and permanently dismiss a supply-chain alert
 ```
 
@@ -195,7 +195,7 @@ But the absolute statement "never half-corrupt" has an **exception branch** to h
 
 An easily-overlooked detail: `os.replace` on a **symlink** replaces the link itself, not the link's target. A managed deployment often points `config.yaml`/`SOUL.md` via a symlink to a git-managed profile bundle, and a direct replace would wipe out the symlink. So Hermes's `atomic_replace` (`utils.py`, #16743) first resolves the symlink's real path then replaces the real file, preserving the link structure. The write also preserves and restores the original file's permission bits.
 
-Atomic write actually has **three** functions, corresponding to three scenarios (`utils.py`): `atomic_json_write` (JSON files), `atomic_yaml_write` (program-generated YAML), and `atomic_roundtrip_yaml_update`. The third is specifically for a **user-hand-edited `config.yaml`**: it uses `ruamel.yaml`'s roundtrip mode — parsing the YAML into a modifiable syntax tree, changing just one dotted key, and on write-back restoring comments/indentation/quotes/Unicode as-is, rather than re-serializing the whole file like an ordinary `yaml.dump`. Why not just use `atomic_yaml_write`? Because `yaml.dump` clears all comments — doing an ordinary dump on the config file the user painstakingly annotated is equivalent to deleting all the comments. So "change one config item" goes through the roundtrip version.
+Atomic write actually has **three** functions, corresponding to three scenarios (`utils.py`): `atomic_json_write` (JSON files), `atomic_yaml_write` (program-generated YAML), and `atomic_roundtrip_yaml_update`. The third is specifically for a **user-hand-edited `config.yaml`**: it uses `ruamel.yaml`'s roundtrip mode — parsing the YAML into a modifiable syntax tree, changing just one dotted key, and on write-back restoring comments/indentation/quotes/Unicode as-is, rather than re-serializing the whole file like an ordinary `yaml.dump`. Why not just use `atomic_yaml_write`? Because `yaml.dump` clears all comments — doing an ordinary dump on the config file the user painstakingly annotated is equivalent to deleting all the comments. So "change one config key" goes through the roundtrip version.
 
 ### Testing: 2,017 Files, but the Real Skill Is in Isolation
 
