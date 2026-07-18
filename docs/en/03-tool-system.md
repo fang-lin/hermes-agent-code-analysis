@@ -69,7 +69,7 @@ mcp_servers:                     # MCP server config (top-level flat key, not a 
 | The model doesn't call a certain tool | `hermes tools` to confirm the tool is enabled; check whether `check_fn` returns True (30-second TTL cache, `registry.py:134`); confirm the tool is in the current platform's toolset; if `tool_search` is on, a non-core tool must first be retrieved by `tool_search` to become visible |
 | A tool is registered but never executed | Check whether the `pre_tool_call` hook intercepted it (`model_tools.py:1175`); check the `_AGENT_LOOP_TOOLS` reserved list (`model_tools.py:600`) |
 | A tool call errors | Check `agent.log` (tool errors go through `_sanitize_tool_error`, `model_tools.py:630`, and the raw exception is in the log); `handle_function_call()` (`model_tools.py:1019`) is the dispatch entry |
-| A command was denied BLOCKED | Possible reasons: a HARDLINE match (cannot be bypassed, `approval.py:366`), the sudo stdin guard (`sudo -S` password guessing, `:448`), a DANGEROUS match (`:547`), a Gateway approval timeout of 300 seconds. Check `command_allowlist` in `config.yaml` |
+| A command was denied BLOCKED | Possible reasons: a HARDLINE match (cannot be bypassed, `approval.py:366`), the sudo stdin guard (`sudo -S` password guessing, `:448`), a DANGEROUS match (`:547`), a gateway approval timeout of 300 seconds. Check `command_allowlist` in `config.yaml` |
 | MCP tools don't appear | Check that the `mcp_servers` config is correct; whether the MCP service process started successfully (check the MCP connection log in `agent.log`) |
 | Tool result truncated | A single result over 100K chars (`budget_config.py:17`) is persisted to `/tmp/hermes-results/`, with only a 1,500-char preview + path kept in the message; the model can read the full content with `read_file` |
 | Tool execution timeout | Terminal commands default to a 180-second timeout (`terminal.timeout` is tunable) |
@@ -227,7 +227,7 @@ The most sensitive part of the tool system is security — a command the Agent e
 
 #### The First: Command Approval (approval.py, 3,242 lines)
 
-approval.py doubled from v0.14's 1,424 lines to 3,242 lines — the increase is mainly in context awareness (cron/session state) and Gateway async approval. `check_all_command_guards()` (`approval.py:2537`) is the entry, executing six levels of checks by priority:
+approval.py doubled from v0.14's 1,424 lines to 3,242 lines — the increase is mainly in context awareness (cron/session state) and gateway async approval. `check_all_command_guards()` (`approval.py:2537`) is the entry, executing six levels of checks by priority:
 
 ```mermaid
 %%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 15, "rankSpacing": 25}}}%%
@@ -251,14 +251,14 @@ The check flow explained level by level:
 1. **Containerized-environment detection** — commands inside Docker, Singularity, Modal, and Daytona are allowed directly, because the container is itself a sandbox
 2. **HARDLINE_PATTERNS** (`approval.py:366`) — command patterns denied unconditionally, not bypassable even with `--yolo`. 12 patterns total: `rm -rf /`, `mkfs`, fork bombs, and other extremely dangerous operations. This is Hermes's security bottom line
 2b. **sudo stdin guard** (pattern defined at `approval.py:448`) — blocks the Agent from a password-guessing attack via a `sudo -S` pipe, also not bypassable by `--yolo`. The error message is `"BLOCKED: sudo password guessing via stdin"`
-3. **--yolo / approvals.mode=off** — the user explicitly chooses to skip all approvals (except HARDLINE and the sudo guard). User-defined deny rules (fnmatch globs in the `approvals` config) take effect before yolo — they are the user-editable version of the "code-built-in hard bottom line"
+3. **--yolo / approvals.mode=off** — the user explicitly chooses to skip all approvals (except HARDLINE and the sudo guard). User-defined deny rules (fnmatch globs in the `approvals` config) take effect before yolo — they are the user-editable version of the "code-built-in hardline"
 4. **Tirith content scan** (`tools/tirith_security.py`, 871 lines) — an external Rust binary that detects content-level threats regex can't catch, like Unicode homoglyph-disguised URLs. Defaults to `fail_open=true` (allow through when unavailable). *(The full introduction to Tirith is in the "Third Line of Defense" section below.)*
 5. **DANGEROUS_PATTERNS** (`approval.py:547-762`) — **73** regex-matched dangerous-command patterns (`rm -rf`, `chmod 777`, `DROP TABLE`, `git reset --hard`, `curl | sh`, the killall force-kill series, etc.; expanded from 52 to 73 across v0.14→v0.18, the additions typified by Windows PowerShell destructive commands)
-6. **Approval** — when DANGEROUS is matched or smart mode judges it suspicious, approval is triggered. The approval method depends on the platform: the CLI is an interactive prompt (once/session/always/deny), the Gateway is an async wait for the user's response (up to 300 seconds), and smart mode (one of the three `approvals.mode` values, `:1797`) uses an auxiliary LLM to judge automatically (APPROVE/DENY/ESCALATE)
+6. **Approval** — when DANGEROUS is matched or smart mode judges it suspicious, approval is triggered. The approval method depends on the platform: the CLI is an interactive prompt (once/session/always/deny), the gateway is an async wait for the user's response (up to 300 seconds), and smart mode (one of the three `approvals.mode` values, `:1797`) uses an auxiliary LLM to judge automatically (APPROVE/DENY/ESCALATE)
 
 Approval results are persisted: an `always`-level decision writes to `command_allowlist` in `config.yaml`, and subsequent similar commands won't ask again.
 
-In the gateway scenario, approval times out after 300 seconds, returning `"BLOCKED: Command timed out without user response"` — one of the most common reasons a command is "denied" under the Gateway. Cron mode has its own config (`approvals.cron_mode`): `deny` denies dangerous commands directly (default, the Agent will find another way), `approve` allows all through.
+In the gateway scenario, approval times out after 300 seconds, returning `"BLOCKED: Command timed out without user response"` — one of the most common reasons a command is "denied" under the gateway. Cron mode has its own config (`approvals.cron_mode`): `deny` denies dangerous commands directly (default, the Agent will find another way), `approve` allows all through.
 
 #### The Second: Path and URL Safety
 
@@ -326,7 +326,7 @@ The thresholds are all in `tools/budget_config.py` (114 lines): the single-resul
 
 The cleverness of this design: **no information is discarded**. An oversized result is persisted to the filesystem, with a 1,500-char preview + path in the message, and the model reads the full content with `read_file` when it needs it. The cost is one extra tool call, but information is never silently lost.
 
-Special handling: although `read_file` sets `max_result_size_chars=100_000` at registration, `PINNED_THRESHOLDS` in `budget_config.py:11` overrides it to `float('inf')` at runtime — because if read_file's result were also persisted, the model would need to read_file the persisted read_file result, falling into an infinite loop. This override is implemented via `BudgetConfig.resolve_threshold()` (`:37`), with a priority chain of: pinned → tool_overrides → registry → default.
+Special handling: although `read_file` sets `max_result_size_chars=100_000` at registration, `PINNED_THRESHOLDS` in `budget_config.py:11` overrides it to `float('inf')` at runtime — because if read_file's result were also persisted, the model would need to read_file the persisted read_file result, falling into an infinite loop. This override is implemented via `BudgetConfig.resolve_threshold()` (`:37`), with a precedence chain of: pinned → tool_overrides → registry → default.
 
 ### Background Delegation: Letting Subagents Run Asynchronously
 
@@ -426,7 +426,7 @@ The traditional approach is to truncate oversized tool results directly. Hermes 
 2. **Add an MCP tool**: add a server config to `mcp_servers` in `config.yaml`
 3. **Add a terminal backend**: implement the `BaseEnvironment` interface
 4. **Custom toolset**: compose in `toolsets` or `platform_toolsets` in `config.yaml`
-5. **Custom security policy**: pre-approve specific command patterns via `command_allowlist`, or add a hard bottom line via `approvals` user deny rules
+5. **Custom security policy**: pre-approve specific command patterns via `command_allowlist`, or add a hardline via `approvals` user deny rules
 
 ---
 
@@ -436,10 +436,10 @@ The traditional approach is to truncate oversized tool results directly. Hermes 
 |-----------------|--------------|
 | 02 — Agent Core | The Agent's `_execute_tool_calls()` (Chapter 02) calls this chapter's `handle_function_call()` one by one via `agent/tool_executor.py`, filling results back into messages; the old mixture_of_agents tool has been refactored into Chapter 02's MoA loop; background delegation shares a foundation with delegate_task |
 | 04 — Skill System | Skill writes are gated by write_approval |
-| 05 — Gateway Layer | Different platforms use different toolsets, and the Gateway handles toolset selection |
+| 05 — Gateway Layer | Different platforms use different toolsets, and the gateway handles toolset selection |
 | 06 — Protocol Adaptation Layer | MCP tools are integrated via `mcp_tool.py`, and ACP has its own tool subset |
 | 07 — Plugin Framework | Plugins modify tool results via the `transform_tool_result` hook |
-| 09 — Kanban System | `kanban_tools.py` provides board-operation tools, in the core tool list |
+| 09 — Kanban System | `kanban_tools.py` provides Kanban-operation tools, in the core tool list |
 
 ---
 
