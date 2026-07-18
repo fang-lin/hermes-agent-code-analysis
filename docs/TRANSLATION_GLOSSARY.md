@@ -136,6 +136,20 @@
 | 自注册 | self-registration | registry.register() |
 | 净化 / 消毒 | sanitize | `_sanitize_tool_error` |
 | 一等公民 | first-class citizen | MCP 工具与内置工具同接口 |
+| 策展人 / Curator | Curator | agent/curator.py 技能库策展，首字母大写 |
+| 遥测 | telemetry | 技能使用遥测 .usage.json |
+| 就绪状态 | readiness status | AVAILABLE/SETUP_NEEDED/UNSUPPORTED |
+| 陈旧 | stale | 技能生命周期 active→stale→archived |
+| 归档 | archive / archived | .archive/ 目录，可恢复 |
+| 抑制名单 | suppression list | 防 update 重装已归档技能 |
+| 前置条件 | prerequisite | 技能 required_* 声明 |
+| 来源追踪 | provenance tracking | skill_provenance ContextVar 前台/后台 |
+| 条件激活 | conditional activation | metadata.hermes conditions |
+| 操作手册 | playbook / operating manual | SKILL.md 是给模型的操作手册 |
+| 多源聚合器 | multi-source aggregator | Skills Hub |
+| 信任级 | trust level / trust tier | builtin > trusted > community |
+| 摘要重放 | digest replay | review 异模型场景 _digest_history |
+| 全量重放 | full replay | review 同模型场景 |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
