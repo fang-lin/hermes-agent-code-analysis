@@ -121,6 +121,21 @@
 | 记忆预取 | memory prefetch | 外部 memory provider 检索 |
 | 消毒 / 修复 | sanitize / repair | `_sanitize_api_messages` |
 | entitlement 检测 | entitlement check | 403 检测：缺订阅 vs token 过期，保留 entitlement 原词 |
+| 命令审批 | command approval | approval.py 危险命令审批 |
+| 写入审批 | write approval | write_approval.py 记忆/技能写入 |
+| 硬底线 / HARDLINE | hardline | HARDLINE_PATTERNS，--yolo 也绕不过 |
+| 防线 | line of defense | 安全"不止三道防线" |
+| 渐进式（工具）披露 | progressive (tool) disclosure | tool_search |
+| 威胁模式库 | threat-pattern library | threat_patterns.py |
+| 提示注入 | prompt injection | promptware/数据外渗语境 |
+| 路径穿越 / 路径遍历 | path traversal | path_security |
+| 内容级威胁 | content-level threat | Tirith 扫描 |
+| 结果大小治理 | result-size governance | budget_config |
+| 后台委托 | background delegation | delegate_task(background=true) |
+| 桌面控制 | desktop control | computer_use |
+| 自注册 | self-registration | registry.register() |
+| 净化 / 消毒 | sanitize | `_sanitize_tool_error` |
+| 一等公民 | first-class citizen | MCP 工具与内置工具同接口 |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
