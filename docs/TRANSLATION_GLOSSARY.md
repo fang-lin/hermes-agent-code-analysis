@@ -91,6 +91,19 @@
 | 虚拟 Provider | virtual provider | MoA 语境，`moa://local` |
 | 多模型聚合 / MoA | Mixture of Agents (MoA) | 首次出现给全称 + 缩写，之后用 MoA；源码/官方文档一致 |
 | 工具网关 / Tool Gateway | Tool Gateway（专名大写）/ tool gateway（泛指小写） | 官方产品名，官方文档 `index.mdx:91` 大写作专名（"four Tool Gateway tools"）；转述性描述（如 registry 自述"捆绑工具网关"）用小写 tool gateway |
+| 控制平面 | control plane | hermes_cli 的定位——不参与对话但决定对话环境 |
+| 托管作用域 | managed scope | `managed_scope.py`，`/etc/hermes/` 企业管控层，按叶键覆盖 |
+| 粘性文件 | sticky file | `~/.hermes/active_profile`，`hermes profile use` 的持久化 |
+| 优雅重启 / drain | graceful restart / drain | 网关 SIGUSR1 drain 在途会话；drain 保留原词 |
+| 凭证 | credential | 与 credential pool 一致 |
+| 设备码流程 | device code flow | OAuth，RFC 8628 |
+| 断路器 | circuit breaker | Kanban `consecutive_failures` + `max_retries` |
+| 乐观锁 | optimistic locking | Kanban 任务认领 |
+| 别名 | alias | `/model` 别名解析，`resolve_alias()` |
+| 快速启动 | fast launch / fast start | Termux 三级加速 |
+| 配置项 | config key / setting | `DEFAULT_CONFIG` 的键 |
+| 优先级链 | precedence chain | provider 解析等多级链路 |
+| 深度合并 | deep merge | `_deep_merge()` 配置合并 |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
