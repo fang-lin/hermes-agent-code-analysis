@@ -116,7 +116,8 @@
 | 可观测性 | observability | display 实时 / insights 事后 |
 | 退款 | refund | IterationBudget.refund() |
 | 预算 | budget | IterationBudget |
-| 抖动 | jitter | 带抖动的指数退避 |
+| 抖动（退避算法义） | jitter | 带抖动的指数退避 |
+| 抖动（网络不稳定义） | blip / flakiness | 网络/DNS 瞬时不稳定，非退避 jitter（同字两义，勿混） |
 | 崩溃恢复 | crash recovery | turn_context 持久化 |
 | 记忆预取 | memory prefetch | 外部 memory provider 检索 |
 | 消毒 / 修复 | sanitize / repair | `_sanitize_api_messages` |
@@ -188,6 +189,22 @@
 | 升级（到人工审批） | escalate | pre_tool_call approve→人工审批门 |
 | 伪 context | pseudo-context | _ProviderCollector no-op stub |
 | 开销感知 | cost-aware | Honcho cadence 退避 |
+| 声明式插件 | declarative plugin | model-provider 只声明元数据 |
+| 双模式 | dual-mode | nemo_relay observe_only/adaptive |
+| 一次性定时器 | one-shot timer | chronos 定时器 |
+| 再武装 | re-arm | chronos 回调后再武装 |
+| sink | sink | teams_pipeline 写入目标，保留原词 |
+| 幂等键 | idempotency key | sink:meeting_id |
+| 防呆设计 | foolproofing / guardrail | langfuse key 前缀校验 |
+| 认证方案 | auth method | dashboard_auth 四方案 |
+| 认证门 | auth gate | should_require_auth |
+| 卫星模块 / 卫星文件 | satellite module / satellite file | 平台插件辅助文件 |
+| 内建军团 | built-in legion | 平台迁移前的内建适配器 |
+| 主战场 | main battleground | 迁移主战场（意译，避免黑话直译） |
+| 卡死循环 / stuck loop | stuck loop | `_STUCK_LOOP_THRESHOLD`，保留原词 |
+| 洪泛控制 / Flood control | flood control | stream_consumer 限速降级，源码原词 |
+| Deliverable Mode | Deliverable Mode | 官方特性名，MEDIA: 标签变附件，专名大写保留 |
+| Team Gateway | Team Gateway | relay 团队网关，专名大写保留 |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 

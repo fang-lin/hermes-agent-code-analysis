@@ -78,7 +78,7 @@ group_sessions_per_user: true   # isolate group-chat sessions per user
 | Cron task didn't execute | `hermes cron list` to confirm the task exists; check whether `scheduler.tick()`'s file lock is stuck (`.tick.lock`) |
 | Cron shows success but the message never arrived | Check whether the dead-target registry marked the target dead (auto-marked on delivery failure, self-heals on success) — see the Delivery Router under "Streaming Delivery" |
 | Pairing code always invalid no matter what | Pairing rate-limiting/lockout may have triggered (the failure counter and platform-level lockout in `gateway/pairing.py`); wait for the lockout window to pass or clear the pending records — it's not necessarily a wrong code |
-| Configured interrupt but it doesn't interrupt | Look at the degradation branches: an active subagent / compression-in-progress both auto-degrade to queue — see the degradation table under "Active-Session Check" |
+| Configured interrupt but it doesn't interrupt | Look at the degradation branches: an active subagent / compression-in-progress both auto-degrade to queue — see the degradation table under "Active-session check" |
 
 > 📖 **Further Reading (Official Docs):**
 > - [Message Gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging)
@@ -198,7 +198,7 @@ A reset clears the conversation history and starts a new `session_id`, but persi
 
 #### PII Protection
 
-Different platforms have different privacy requirements for user IDs. `_PII_SAFE_PLATFORMS` (`session.py:332`) contains 4 platforms — WhatsApp, Signal, Telegram, BlueBubbles — whose user_id may contain sensitive info like a real phone number. These platforms' IDs are hashed for anonymization before being injected into the system prompt, so the real ID never leaks to the LLM. Other platforms' (take Discord as an example) user_id keeps the original format, because Discord's mention system needs the original ID (`<@user_id>`).
+Different platforms have different privacy requirements for user IDs. `_PII_SAFE_PLATFORMS` (`session.py:332`) contains 4 platforms — WhatsApp, Signal, Telegram, BlueBubbles — whose user_id may contain sensitive info like a real phone number. These platforms' IDs are hashed for anonymization before being injected into the system prompt, so the real ID never leaks to the LLM. Other platforms — Discord, for example — keep the user_id in its original format, because Discord's mention system needs the original ID (`<@user_id>`).
 
 ### Platform Adapters: From a Built-in Legion to a Plugin Ecosystem
 
