@@ -182,7 +182,7 @@ flowchart TD
 
 ### How Does the Agent Auto-Create Skills?
 
-This is the core of hermes-agent's "self-improvement" capability. The finalize step of Chapter 02's lifecycle mentioned "skill self-improvement," and the trigger logic now lives in the finalize file (`turn_finalizer.py`); here we unpack the specific mechanism.
+This is the core of hermes-agent's "self-improvement" capability. The epilogue step of Chapter 02's lifecycle mentioned "skill self-improvement," and the trigger logic now lives in the epilogue file (`turn_finalizer.py`); here we unpack the specific mechanism.
 
 ```mermaid
 %%{init: {"theme": "neutral", "themeVariables": {"fontSize": "14px"}, "flowchart": {"nodeSpacing": 15, "rankSpacing": 25}}}%%
@@ -205,14 +205,14 @@ flowchart TD
 
 **Figure: The complete flow of the Agent auto-creating a skill (including trigger prerequisites)**
 
-The trigger conditions (`turn_finalizer.py:456-458` — migrated from conversation_loop to the finalize file with the god-file decomposition) aren't a simple "trigger once the iteration count is enough" — all three conditions must hold at once: `_skill_nudge_interval > 0` (can be fully disabled by setting to 0), `_iters_since_skill >= interval`, and `"skill_manage" in valid_tool_names` (the skill toolset must be enabled). If any one isn't met, it doesn't trigger. The counter `_iters_since_skill` increments on each tool iteration (`conversation_loop.py:697`) and resets to 0 when `skill_manage` is actually used (the concurrent execution path `tool_executor.py:344`, the serial execution path `:1067` — single-tool-call rounds usually go serial).
+The trigger conditions (`turn_finalizer.py:456-458` — migrated from conversation_loop to the epilogue file with the god-file decomposition) aren't a simple "trigger once the iteration count is enough" — all three conditions must hold at once: `_skill_nudge_interval > 0` (can be fully disabled by setting to 0), `_iters_since_skill >= interval`, and `"skill_manage" in valid_tool_names` (the skill toolset must be enabled). If any one isn't met, it doesn't trigger. The counter `_iters_since_skill` increments on each tool iteration (`conversation_loop.py:697`) and resets to 0 when `skill_manage` is actually used (the concurrent execution path `tool_executor.py:344`, the serial execution path `:1067` — single-tool-call rounds usually go serial).
 
 `spawn_background_review_thread()` (`background_review.py:925`) builds the review logic — it returns a `(target, prompt)` tuple, and the actual `threading.Thread` is created by the caller `AIAgent._spawn_background_review()`. Inside the target function, a separate review Agent is created (a brand-new `AIAgent` instance, `max_iterations=16`, `background_review.py:685`), granted only the `skills` toolset via a toolset allowlist, while the `memory` toolset is added **conditionally** — only if the profile enabled memory or user_profile (`background_review.py:784-790`; hardcoding both once let a memory-disabled profile be polluted by background-review writes, #54937). `skip_memory=True` prevents the review fork from leaking the harness prompt to an external memory Provider (take Honcho as an example).
 
 **Which model does the review use?** v0.18 introduced model routing (`_resolve_review_runtime()`, `background_review.py:46`):
 
 - **Default (auto / unconfigured / same name as the parent)**: inherits the main Agent's live runtime — `routed=False`, reuses the parent's `_cached_system_prompt` to hit the Anthropic prefix cache (saving about 26% cost, `background_review.py:736-742`), replaying the full conversation
-- **A different model explicitly configured** (`auxiliary.background_review.{provider,model}`): `routed=True`, dispatching the review to a cheaper model. In this case the parent's prompt-cache advantage no longer exists, so it switches to a **digest replay** — `_digest_history()` (`:112`) compresses the conversation history into a synthesized summary of the last ~24 messages before handing it to the review model. The comment states the policy bluntly: "same model → full replay to eat the cache; different model → digest replay to save tokens. That's the whole strategy"
+- **A different model explicitly configured** (`auxiliary.background_review.{provider,model}`): `routed=True`, dispatching the review to a cheaper model. In this case the parent's prompt-cache advantage no longer exists, so it switches to a **compact digest replay** — `_digest_history()` (`:112`) compresses the conversation history into a synthesized summary of the last ~24 messages before handing it to the review model. The comment states the policy bluntly: "same model → full replay to eat the cache; different model → digest replay to save tokens. That's the whole strategy"
 
 **Key detail**: the review Agent installs an auto-deny dangerous-command approval callback (`background_review.py:626-634`), preventing the background Agent from hanging waiting for user input when it tries to execute a dangerous command. When the thread ends, it calls `shutdown_memory_provider()` and `close()` to ensure resources are released.
 
@@ -681,7 +681,7 @@ Optional skills aren't installed with hermes-agent by default; enable them via `
 | Related Chapter | Relationship |
 |-----------------|--------------|
 | 00 — Project Overview | Skills are the implementation of the "self-improvement" core selling point |
-| 02 — Agent Core | The skill-self-improvement trigger point is in turn_finalizer.finalize_turn (the finalize stage) |
+| 02 — Agent Core | The skill-self-improvement trigger point is in turn_finalizer.finalize_turn (the epilogue stage) |
 | 03 — Tool System | `skill_manage` and `skills_list`/`skill_view` are registered tools; skill writes are gated by write_approval |
 | 07 — Plugin Framework | The skill-vs-plugin contrast is established in Chapter 07 |
 | 11 — Cron Scheduling | Skills referenced by cron are protected from Curator archiving |

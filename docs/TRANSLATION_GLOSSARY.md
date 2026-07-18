@@ -123,7 +123,7 @@
 | entitlement 检测 | entitlement check | 403 检测：缺订阅 vs token 过期，保留 entitlement 原词 |
 | 命令审批 | command approval | approval.py 危险命令审批 |
 | 写入审批 | write approval | write_approval.py 记忆/技能写入 |
-| 硬底线 / HARDLINE | hardline | HARDLINE_PATTERNS，--yolo 也绕不过 |
+| 硬底线 / HARDLINE | hardline | **专指**命令审批的 HARDLINE_PATTERNS（--yolo 也绕不过，03 章）。其他语境下泛用的"硬底线"（如 04 章技能保护名单 PROTECTED_BUILTIN_SKILLS）用 "hard bottom line"，非本术语 |
 | 防线 | line of defense | 安全"不止三道防线" |
 | 渐进式（工具）披露 | progressive (tool) disclosure | tool_search |
 | 威胁模式库 | threat-pattern library | threat_patterns.py |
@@ -176,6 +176,18 @@
 | 出站 / 入站 | outbound / inbound | messages_send 出站通路 |
 | 事件桥 | event bridge | EventBridge |
 | 游标 | cursor | events_poll after_cursor |
+| 中间件 | middleware | register_middleware，与钩子并列的扩展面 |
+| 洋葱模型 | onion model | 执行中间件 next_call 包裹 |
+| 载荷 | payload | 请求中间件改写 request/args |
+| 门控 | gate / gating | fail-closed 门控 |
+| 互斥（插件） | exclusive | kind=exclusive 记忆/上下文引擎 |
+| 遮蔽 | shadowing | 跨工具集同名注册默认拒绝 |
+| 生命周期钩子 | lifecycle hook | VALID_HOOKS 23 种 |
+| 白名单 | allowlist | plugins.enabled（与黑名单 denylist 对） |
+| 阻断 | block | pre_tool_call block 动作 |
+| 升级（到人工审批） | escalate | pre_tool_call approve→人工审批门 |
+| 伪 context | pseudo-context | _ProviderCollector no-op stub |
+| 开销感知 | cost-aware | Honcho cadence 退避 |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
