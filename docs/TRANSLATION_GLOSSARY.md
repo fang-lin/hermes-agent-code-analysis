@@ -310,7 +310,7 @@
 | 活性判断 / 活性校验 | liveness check | cookiesHaveLiveSession |
 | 功能模块地图 | feature-module map | 20 模块地图 |
 | Web 壳 | Web shell | Electron 包 Web Dashboard |
-| 零侵入 | zero-intrusion | 桌面不 import Python |
+| 零侵入 | zero-intrusion | 桌面不 import Python；作前置定语时带连字符（a zero-intrusion design），作名词短语/标题时不带（achieves zero intrusion / Zero Intrusion on Python） |
 | 星图 | Star Map | 会话星图可视化，专名 |
 | 桌面宠物 / petdex | desktop pet / petdex | 保留 petdex 原词 |
 | 命令面板 | command palette | |
