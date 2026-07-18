@@ -253,6 +253,21 @@
 | 热加载 | hot reload | 改 provider key 不重启 gateway 即生效 |
 | 多级流水线 | multi-stage pipeline | context_from 串任务 |
 | 注入扫描 | injection scan | prompt injection / 数据外泄检测 |
+| 数据工厂 | data factory | 12 章：Agent 产出训练数据的流水线 |
+| 轨迹压缩 | trajectory compression | trajectory_compressor.py |
+| 工具集随机化 | toolset randomization | 按分布独立掷骰采样 |
+| 推理过滤 | reasoning filtering | 丢弃零推理轨迹 |
+| 保头保尾压中间 | protect the head and tail, compress the middle | 压缩策略口号 |
+| 幻觉工具过滤 | hallucinated-tool filtering | 丢弃含幻觉工具名的轨迹 |
+| 内容匹配续传 | content-matched resume | 按 prompt 文本而非行号续传 |
+| 工具统计补零 | tool-stat zero-fill | 对没用到的工具填 0，对齐 Arrow schema |
+| 哨兵字符串 | sentinel string | mini_swe 的 MINI_SWE_AGENT_FINAL_OUTPUT 收尾信号 |
+| 摘要模型 | summarizer model | 压缩中间过程用的模型 |
+| 训练窗口 | training window | 轨迹要压进的 token 窗口 |
+| 微调 | fine-tuning (SFT) | SFT 保留缩写 |
+| 强化学习 | reinforcement learning (RL) | RL 保留缩写 |
+| 无序并行 | unordered parallel | imap_unordered，谁先跑完先收 |
+| 批级并行 | batch-level parallelism | 并行粒度是 batch 而非 prompt |
 | 卡死循环 / stuck loop | stuck loop | `_STUCK_LOOP_THRESHOLD`，保留原词 |
 | 洪泛控制 / Flood control | flood control | stream_consumer 限速降级，源码原词 |
 | Deliverable Mode | Deliverable Mode | 官方特性名，MEDIA: 标签变附件，专名大写保留 |
