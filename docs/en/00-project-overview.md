@@ -394,9 +394,9 @@ The motivation for this design became clearer after the Mini Shai-Hulud incident
 1. **Pin exact version numbers** (`==X.Y.Z`) — every dependency upgrade requires a conscious human review. (The comment claims "all exactly pinned, no ranges," but the actual list has 5 infrastructure packages — urllib3, fastapi, uvicorn, etc. — that still use ranges; the comment has drifted slightly from reality.)
 2. **Lazy-loadable dependencies don't go into the `[all]` extra** — reducing the blast radius. Take mistralai as an example: even after a clean version was restored, it was deliberately not added back to `[all]` (comment at `pyproject.toml:218-224`), so a future poisoned version won't contaminate new installs
 
-#### Decision 2: Two "God Files," and the Decomposition in Progress
+#### Decision 2: Two "God-Files," and the Decomposition in Progress
 
-`cli.py` (16,184 lines) and `run_agent.py` (6,013 lines) are Hermes's two giant files. In most projects, files of this size would be considered technical debt. The v0.14-era stance was that it was intentional — concentrating all terminal-interaction logic in one file and containing the entire Agent loop in one class, sacrificing modularity for traceability of the execution path.
+`cli.py` (16,184 lines) and `run_agent.py` (6,013 lines) are Hermes's two giant "god-files." In most projects, files of this size would be considered technical debt. The v0.14-era stance was that it was intentional — concentrating all terminal-interaction logic in one file and containing the entire Agent loop in one class, sacrificing modularity for traceability of the execution path.
 
 But since v0.17, the attitude has shifted: a refactor that calls itself a "god-file decomposition campaign" (shipped with v0.17.0, tag `v2026.6.19`) breaks them apart in phases:
 
@@ -457,7 +457,7 @@ That a framework can do all this is certainly worth appreciating. But by now you
 
 ### Conclusion
 
-**This is a typical product of AI-heavy-assisted development.** The architectural design and core decisions were made by humans; a large amount of the implementation code was AI-generated and human-reviewed. A "self-improving AI agent" project using AI to develop itself — this isn't laziness but dogfooding (developing a product using the very product you're building) — a development philosophy that both validates quality and accelerates iteration.
+**This is a typical product of heavily AI-assisted development.** The architectural design and core decisions were made by humans; a large amount of the implementation code was AI-generated and human-reviewed. A "self-improving AI agent" project using AI to develop itself — this isn't laziness but dogfooding (developing a product using the very product you're building) — a development philosophy that both validates quality and accelerates iteration.
 
 ---
 

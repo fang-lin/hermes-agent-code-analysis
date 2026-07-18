@@ -50,7 +50,8 @@
 | 提示缓存 | prompt caching | 保留英文 prompt caching 亦可，全程统一 |
 | 回退链 / Fallback | fallback chain | |
 | 重试与退避 | retry and backoff | |
-| 终端后端 | terminal backend | |
+| 终端后端 | terminal backend | 配置项语境（`terminal.backend`） |
+| 执行后端 | execution backend | `tools/environments/` 的 7 种运行时（local/docker/ssh/daytona/singularity/modal…），接口类 `BaseEnvironment`；官方文档 execution backend / execution environment 混用，统一取 execution backend。与「终端后端」是同一物的不同视角，正文按中文原词对应译（终端后端→terminal backend、执行后端→execution backend） |
 | 沙箱 | sandbox | |
 | 会话 | session | |
 | 会话存储 | session storage | |
@@ -90,6 +91,7 @@
 | 消息网关 | message gateway | 泛指时 message gateway；指模块用 gateway |
 | 虚拟 Provider | virtual provider | MoA 语境，`moa://local` |
 | 多模型聚合 / MoA | Mixture of Agents (MoA) | 首次出现给全称 + 缩写，之后用 MoA；源码/官方文档一致 |
+| 工具网关 / Tool Gateway | Tool Gateway（专名大写）/ tool gateway（泛指小写） | 官方产品名，官方文档 `index.mdx:91` 大写作专名（"four Tool Gateway tools"）；转述性描述（如 registry 自述"捆绑工具网关"）用小写 tool gateway |
 
 ## 章节标题对照（文件名已固定，标题译法在此统一）
 
