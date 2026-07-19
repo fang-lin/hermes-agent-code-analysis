@@ -1,64 +1,109 @@
-# 文档 / skill 与上游 hermes 的同步自动化
+# 文档 / skill 与上游 hermes 的同步自动化 — 设计
 
-本仓的文档(`docs/`)和 skill(`.claude/skills/hermes-agent-expert/`)钉在 hermes-agent 的某个版本(见根目录 `.hermes-pin`)。上游发展很快(近期 ~712 commit / 版、约每周一版),所以这套自动化负责**及时发现上游变化、有把握地把文档拉回同步**——而不追求无人值守全自动。
+本仓的文档(`docs/`)和 skill(`.claude/skills/hermes-agent-expert/`)钉在 hermes-agent 的某个版本(根目录 `.hermes-pin`)。上游很快(近期 ~712 commit/版、约每周一版)。这套自动化的**长期目标是尽量少人工、让 agent 自主把文档拉回同步**;做法不是"少验证",而是**把验证本身也交给 agent + 脚本**,人退成异常处理者。
 
-## 三个阶段
+**核心原则**
+- **自主 ≠ 去掉验证**:铁律"每条断言独立二次验证"照旧,核对者从"人"换成"脚本 + 对抗式复核 agent"。
+- **判断 / 分解 / 执行是三件事,分层**:定级(多严重)≠ 规划(拆哪些活)≠ 施工(动手改)。不混。
+- **只改 docs 的口子是施工阶段的 PR**;`.hermes-pin` 只随施工合并 bump;哨兵永不动它。
+- **及时同步不累计**:够格的 release 及时同步、每次小;控频靠定级筛掉 no-op,不靠攒。
+- **自主逐步解锁**:架子按全自主搭,但每个"自动放行"初期都关(出物件给人审),按类别观察一致率达标再逐个打开。kill switch 常在。
 
-| 阶段 | 干什么 | 成本 | 现状 |
-|------|--------|------|------|
-| **①哨兵 Sentinel** | 侦测有没有比 pin 新的 release,跑机械自检,开 drift issue 报警 | 脚本、**零 token** | ✅ 已建并 CI 验证 |
-| **②定级 Triage** | 读 drift issue 里的覆盖路径 diff,判爆炸半径(化妆/浅层/深层),定同步范围 | 初期人工 | ⬜ 规划中 |
-| **③同步 Sync** | agent 按定好的范围**真正改 docs/skill** → 跑 check-anchors 到绿 → 开 PR → 人 review 合并 | 走 Max 订阅额度 | ⬜ 规划中(卡在 token,见下) |
+## 四阶段总览
 
-铁律贯穿始终:**只改 docs 的口子是③的 PR,人始终在闭环里合并**(守住本项目"每条发现独立二次验证")。`.hermes-pin` **只在③的同步 PR 里 bump**,哨兵永不动它。
+| # | 阶段 | 回答的问题 | 谁做 | 产出物件(可审) | 人何时介入 | 现状 |
+|---|------|-----------|------|----------------|-----------|------|
+| ① | **哨兵 Sentinel** | 有没有新版?结构漂了多少? | 脚本(零 token) | drift issue + 结构化 payload | 从不 | ✅ 已建 |
+| ② | **定级 Triage** | 这次**语义**上多严重?该不该动、动多深? | 多 agent(判断) | **判级**(none/cosmetic/shallow/deep + 置信度) | 深层 / 低置信 | ⬜ 设计 |
+| ③ | **规划 Plan** | 要改的话,**拆成哪些具体活**? | agent(分解) | **work plan**(改哪章/哪锚点/哪段、改什么、源码依据、顺序) | 审 plan(最省力的关卡) | ⬜ 设计 |
+| ④ | **同步 Sync** | 把活干了、验对、落地 | 改写 agent + 对抗复核 + 机械闸 | PR(+复核记录) | 未解锁自动合并的类别 / 验证不过 | ⬜ 设计 |
 
-原则:**够格的 release 及时同步、每次保持小;控频靠②定级筛掉没动到文档语义的 no-op release,不靠攒**(累计只会把小改攒成大改,review 更难、爆炸半径更大)。
-
----
-
-## ①哨兵(已建)
-
-**文件**
-- `.hermes-pin` —— 记录 docs/skill 分析到的 tag/commit(现 `v2026.7.7.2` / `9de9c25f6`)。
-- `.github/scripts/hermes-release-watch.sh` —— 哨兵逻辑(可本地跑)。
-- `.github/workflows/hermes-release-watch.yml` —— 每日 06:00 UTC + 手动 `workflow_dispatch`。
-
-**行为**
-1. 查上游最新 release。
-2. 若 = `.hermes-pin` 的 tag → 输出 `UPTODATE`,**什么都不做**(惰性,不刷 issue)。
-3. 若有更新 → 只看**最新**那一版,收集:落后几个 release、`gh compare` 算落后多少 commit / 变更多少文件、其中多少落在**文档覆盖路径**;再浅 clone 最新 tag 跑 `orient.sh` + `check-anchors.sh`;把这些写成一份 drift 报告,按 tag **去重**开/更新一个带 `hermes-drift` 标签的 issue。
-
-**drift issue 里有什么**(就是②定级的输入):落后版本列表、落后 commit/文件数、**覆盖路径变更文件清单**(爆炸半径线索)、机械自检结果(行漂表 + 锚点校验)。
-
-**一句诚实话**:机械自检只抓**结构漂移**(锚点挪位/断裂)。**同一行的语义变化**(比如某个默认值从 3 改成 5)不会显示出来——所以②定级必须读那份覆盖路径 diff,不能只看哨兵的绿灯。
-
-**本地手动跑**
-```bash
-# 正常(对当前 pin):
-bash .github/scripts/hermes-release-watch.sh
-# 模拟"有新版"(拿旧 pin + 复用本地 clone 免下载):
-HERMES_PIN_TAG=v2026.7.1 HERMES_PIN_COMMIT=v2026.7.1 \
-  HERMES_SRC_DIR=./hermes-agent bash .github/scripts/hermes-release-watch.sh
-```
+**为什么定级和规划分层**:定级是**判断**(严重度/该不该动),规划是**分解**(把活拆成可审的清单)。混在一起会让"我以为是小改"直接跳到"agent 开始改",错过"先看看它打算改哪些、为什么"这个最便宜、最高杠杆的检查点。分开后,**审 plan 比审成品 diff 快得多、也拦得早**。
 
 ---
 
-## ②定级 / ③同步(规划中)
+## ①哨兵 Sentinel（已建)
 
-- **②定级**:定一套判级 rubric(化妆级→重新 pin 锚点;浅层→定点改受影响的锚点+文档段;深层→整章重审),你读 drift issue 后用 label(如 `resync:scoped` / `resync:chapter`)确认范围。多 agent 自动评估先不做,等真实版本跑几轮证明需要再上。
-- **③同步**:`resync:*` label / 手动触发(带 scope 入参)→ `anthropics/claude-code-action` 用 `CLAUDE_CODE_OAUTH_TOKEN` → 喂 agent:drift 报告 + 范围过滤 diff + `CLAUDE.md` 规则 + `hermes-agent-expert` skill → 按范围改 → check-anchors 到绿 → 开 PR。绝不 push main;`.hermes-pin` 在 PR 里 bump;`--max-turns` 封顶控额度。
-
-**③启用前你要做一步**(我替不了):
-```bash
-claude setup-token          # 本地浏览器登录 Max 账号,生成一年期 token
-```
-再到 repo → Settings → Secrets and variables → Actions,加 secret **`CLAUDE_CODE_OAUTH_TOKEN`**(用它而非 `ANTHROPIC_API_KEY`,走订阅额度、不额外按 token 计费)。注意:CI 用量与你交互式写代码**共用** Max 的 5 小时/周窗口;token 约一年后需轮换。
+**目的**:侦测比 pin 新的 release,量化**结构**漂移,产出给②消费的结构化信号。
+**触发**:每日 06:00 UTC + 手动。
+**步骤**:最新 release vs `.hermes-pin`;相等 → `UPTODATE` noop;有新版 → 取最新,`gh compare` 算落后 commit/文件、范围过滤到覆盖路径、浅 clone 跑 `orient.sh`(行漂)+ `check-anchors.sh`(锚点断裂)→ 写 drift issue + JSON payload → **触发②**。
+**盲区(诚实)**:只抓**结构**漂移;同一行的**语义变化**(默认值 3→5)锚点全绿也发现不了——留给②读真 diff。
 
 ---
 
-## 维护速查
+## ②定级 Triage（判断:多严重,不产出 work plan)
 
-- **同步完成后**:合并③的 PR;`.hermes-pin` 已在该 PR 里更新到新 tag/commit;哨兵下次自动以新基准比对。
-- **暂停哨兵**:在 `hermes-release-watch.yml` 注释掉 `schedule:`(留 `workflow_dispatch` 手动)。
-- **token 过期**:重跑 `claude setup-token`,更新 secret。
-- **进度**:任务拆解见 `/tasks`(#25–#33)。
+**目的**:只回答"这次语义上多严重、该不该动、动多深",**不拆活**。语义检测真正发生在这里。
+**触发**:①的 DRIFT 自动触发。
+**输入**:①的 payload(覆盖路径变更文件、锚点断裂、落后量)+ 读真 diff 的能力。
+
+**步骤(多 agent 扇出 + 对抗)**
+1. **映射**:每个变更覆盖文件 → 受影响的章节/skill 锚点(靠子系统→源码地图)。
+2. **分区判级(扇出)**:每个受影响子系统一个 agent,读 diff hunk + 当前文档段,判级并**举证**:`none`(没动文档断言)/`cosmetic`(仅行漂)/`shallow`(少数事实/锚点变)/`deep`(行为/架构变、增删能力、子系统重构)。
+3. **对抗补漏**:独立 critic agent 专盯"有语义变化但零锚点漂移"这种最危险的漏报。
+4. **裁决**:整体 `class`(取最重)+ `confidence`(扇出一致度 × critic 有无翻案)。
+
+**输出**:一个**判级**贴回 issue:`{class, confidence, affected_areas[]}`。**注意:只有判级,没有 work_list**——那是③的事。
+
+**决策闸**:`none` → 关 issue、什么都不做。`cosmetic`/`shallow` 高置信 → 自动进③。`deep` 或低置信 → 升级人确认"要不要动、动多深"。
+
+---
+
+## ③规划 Plan（分解:拆成可审的 work plan)
+
+**目的**:定级说"要动"之后,把改动**分解成一份具体、可审的清单**——这是独立一层,不和定级混。
+**触发**:②裁决为"要动"(自动或人确认深度后)。
+**输入**:②的判级 + affected_areas + 真 diff + 现有文档/skill。
+
+**步骤**:一个规划 agent 遍历受影响区,产出 **work plan**——逐条:
+`{doc_or_skill_location(章节/段/锚点), 现状, 应改成什么, 源码依据(file:line/symbol), 依赖顺序, 预估范围}`。
+并标注:哪些是纯锚点重新 pin(近乎机械)、哪些是事实改写、哪些要重读源码确认。
+
+**输出**:一份 **work plan**(结构化 + 人可读),贴进 issue。**这是最高杠杆的人审点**——审"打算改哪些、为什么"比审最终 diff 快且拦得早。
+
+**决策闸**:plan 在解锁集内 → 自动进④;否则 → 人审 plan、批了再进④。(初期:所有 plan 都人审。)
+
+---
+
+## ④同步 Sync（施工 + 自主验证 + 落地)
+
+**目的**:按 work plan 把活干了、自主验对、落地。
+**触发**:③的 plan 获批(自动或人)。
+
+**步骤**
+1. **改写 agent**(`claude-code-action` + `CLAUDE_CODE_OAUTH_TOKEN`):**严格照 work plan** 逐条改(用 `hermes-agent-expert` skill 定位、grep 真源码确认);同步更新 `anchors.txt`。
+2. **机械硬门**:`check-anchors.sh` + `orient.sh`(对新 tag)**必须 ERROR 0**;不绿 → 迭代,修不好 → 升级人。
+3. **对抗验证闸(二次验证机械化)**:扇出 **3 个独立复核 agent**(独立于改写者,对抗 prompt"逐条把改动核回源码、挑错")——对应铁律"两次一致才采纳"。
+4. **落地**:机械绿 **且** 复核一致 **且** 该 `class` 在自动合并解锁集 → **自动合并 + bump `.hermes-pin`**;否则 → 开 PR 等人(附复核记录)。
+
+---
+
+## 人审点 & 自主阶梯
+
+四层里有**三个可配人审点**,都初始开、按数据逐个撤:
+
+| 关卡 | 位置 | 审什么 | 建议初期 |
+|------|------|--------|---------|
+| G1 | ②后 | 判级(该不该动、动多深) | 仅 deep/低置信 时人审 |
+| G2 | ③后 | **work plan**(打算改哪些、为什么) | **全部人审(首选保留的关卡,最省力)** |
+| G3 | ④落地 | 验证结果 + 是否自动合并 | 初期全出 PR 人合 |
+
+**解锁配置** `.github/sync-policy.yml`:每个关卡按 `class` 记"是否自动放行";初期全 `false`。**度量**驱动解锁:复核 agent 结论 vs 人结论的**一致率**、**假通过率**、每次**成本**;某 class 一致率够高 → 打开该 class 的自动放行。**kill switch**:一个 repo variable,一拨全回落人工。
+
+**永远生效**:绝不 push main;复核 agent 独立于改写者、多数/一致才过;`--max-turns` 封顶控额度;`.hermes-pin` 只随合并 bump。
+
+---
+
+## 文件与状态
+
+| 文件 | 阶段 | 状态 |
+|------|------|------|
+| `.hermes-pin` / `hermes-release-watch.sh` / `hermes-release-watch.yml` | ①哨兵 | ✅ |
+| `hermes-triage.yml`(多 agent 判级) | ②定级 | ⬜ |
+| `hermes-plan.yml`(work plan 分解) | ③规划 | ⬜ |
+| `hermes-sync.yml`(改写+对抗验证+落地) | ④同步 | ⬜ |
+| `.github/sync-policy.yml`(三关解锁集 + kill switch) | 横切 | ⬜ |
+
+**④启用前你要做一步**:`claude setup-token` 本地登录 Max 生成 token → 加 repo secret `CLAUDE_CODE_OAUTH_TOKEN`(走订阅额度,不额外计费;与交互式共享 5h/周窗口;约一年轮换)。
+
+进度任务:`/tasks`。
