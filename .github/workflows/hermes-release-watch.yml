@@ -1,6 +1,6 @@
-name: hermes release watch (sentinel)
+name: hermes 新版本检测
 
-# Stage ① 哨兵 / Sentinel — daily, script-only, NO LLM/tokens.
+# 阶段① 新版本检测 — 每天跑,纯脚本,不用 LLM、不花 token。
 # Checks whether NousResearch/hermes-agent has a release newer than .hermes-pin.
 # On a new release: runs the skill's mechanical checks and opens/updates a "drift" issue.
 # It never changes docs or the pin. Inert while the pin equals the latest release.
