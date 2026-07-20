@@ -8,3 +8,6 @@ hermes-agent/
 !.claude/skills/
 .antigravitycli/
 hermes-drift-report.md
+# Codex CLI 的本地残留(别的工具生成,与本项目无关)
+.codex/
+AGENTS.md
