@@ -301,4 +301,8 @@ audit:
 
 **③启用前需要你做一步**(这步替不了):在本地跑 `claude setup-token`,登录你的 Max 账号生成一个一年期 token,再加成仓库 secret `CLAUDE_CODE_OAUTH_TOKEN`。用它(而不是 `ANTHROPIC_API_KEY`)就走订阅额度、不额外按 token 计费;但注意这份额度和你平时在终端用 Claude Code 是共享的(同一个 5 小时 / 每周窗口),token 大约一年换一次。
 
+## 实现选型
+
+具体在 GitHub Actions 里怎么落地(跑 agent 的方式、鉴权、多 agent 并行、结构化 I/O、工作流复用等)的来龙去脉,记在 [`.github/adr/0001-ci-tech-choices.md`](adr/0001-ci-tech-choices.md)。
+
 进度任务见 `/tasks`。
