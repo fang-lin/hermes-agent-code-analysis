@@ -3,22 +3,17 @@ set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../../.." && pwd)"
 
-# sync-run.sh 会在本仓库上真的 `git checkout -B` 和改 .hermes-pin,
-# 测试前后要把分支和文件状态存/还原,不能把仓库留在游离分支或带残留改动上。
-orig_branch="$(git -C "$root" branch --show-current)"
-pin_backup="$(mktemp)"
-cp "$root/.hermes-pin" "$pin_backup"
+# sync-run.sh 会真的 `git checkout -B` 和改 .hermes-pin,绝不能指向真仓 $root ——
+# 搭一个一次性 git 仓,把 sync-run.sh 依赖的 .github 文件复制进去,REPO_ROOT 只指向
+# 这个一次性仓,真仓全程不碰,不需要任何备份/还原。
+work="$(mktemp -d)"
+mkdir -p "$work/.github"
+cp -r "$root/.github/scripts" "$root/.github/sync-policy.yml" "$root/.github/prompts" "$root/.github/schemas" "$work/.github/"
+printf 'tag=vY\ncommit=x\n' > "$work/.hermes-pin"
+( cd "$work" && git init -q && git config user.email a@b.c && git config user.name t && git add -A && git commit -q -m init )
 
 stub="$(mktemp -d)"
-cleanup() {
-  rm -rf "$stub"
-  git -C "$root" reset -q -- .hermes-pin >/dev/null 2>&1
-  cp "$pin_backup" "$root/.hermes-pin"
-  rm -f "$pin_backup"
-  git -C "$root" checkout -q "$orig_branch" >/dev/null 2>&1
-  git -C "$root" branch -D auto/sync-local >/dev/null 2>&1
-}
-trap cleanup EXIT
+trap 'rm -rf "$work" "$stub"' EXIT
 
 # 桩:claude 什么都不干但落一个 pass/fail 的 review 文件;gh/finalize 记录调用
 # 注:brief 原稿用 `/tmp[^ ]*review-[0-9]*.json` 抓 REVIEW_OUT 路径,但 macOS 上
@@ -36,18 +31,15 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$stub/gh"; chmod +x "$stub/gh"
 printf '#!/usr/bin/env bash\nexit "${ANCHORS_RC:-0}"\n' > "$stub/check-anchors.sh"; chmod +x "$stub/check-anchors.sh"
 printf '#!/usr/bin/env bash\nexit "${ORIENT_RC:-0}"\n' > "$stub/orient.sh"; chmod +x "$stub/orient.sh"
 
-# _finalize 的桩:必须桩掉,绝不能让真的 _finalize.sh 跑起来 —— 它内部是裸
-# `git commit` + `git push -u origin`,不走任何可注入的 CMD,一旦在这个测试
-# 用的真仓(REPO_ROOT="$root")上跑真的会把提交推到真的 origin 远端。
-# (回归教训:sync-run.sh 曾经硬编码调用真 _finalize.sh 路径,这个测试跑"一次过"
-#  分支时就真的 commit+push 到了 origin/auto/sync-local。现在 sync-run.sh 改成
-#  读 FINALIZE_CMD 可注入,这里桩成什么都不干,只记一条调用日志。)
+# _finalize 的桩:必须桩掉,不让真的 _finalize.sh 跑(它内部是裸 `git commit` +
+# `git push -u origin`)。REPO_ROOT 现已指向一次性仓,即便桩掉失败也推不到真远端,
+# 但仍然桩掉,保持这个测试只验证 sync-run.sh 自己的调用逻辑,不牵连 _finalize.sh。
 finalize_log="$stub/finalize-calls"
 printf '#!/usr/bin/env bash\necho "finalize $*" >> %q\nexit 0\n' "$finalize_log" > "$stub/finalize"
 chmod +x "$stub/finalize"
 
 # 一次过
-VERDICT=pass CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" \
+VERDICT=pass CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$work" \
   CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" FINALIZE_CMD="$stub/finalize" \
   WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
@@ -56,7 +48,7 @@ rc=$?
 grep -q "finalize" "$finalize_log" 2>/dev/null || { echo "一次过应调用 finalize(桩)"; exit 1; }
 
 # 轮数耗尽(复核恒 fail)
-VERDICT=fail CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" \
+VERDICT=fail CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$work" \
   CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" FINALIZE_CMD="$stub/finalize" \
   WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
@@ -66,7 +58,7 @@ rc=$?
 # 硬检查门:orient 恒失败,即便复核恒过,也必须轮数耗尽退出 3
 # (Fix 1 之前 `! A && B` 只在 A 失败且 B 成功时才判定不过,B 失败时误判为过,
 #  这个用例会误得 0;修复后必须是 3。)
-VERDICT=pass ORIENT_RC=1 CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" \
+VERDICT=pass ORIENT_RC=1 CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$work" \
   CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" FINALIZE_CMD="$stub/finalize" \
   WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1

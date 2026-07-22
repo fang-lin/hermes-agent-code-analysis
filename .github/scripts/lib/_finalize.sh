@@ -4,9 +4,14 @@ rev="$1"; branch="$2"; issue="$3"; cycle="$4"
 ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 GH="${GH_CMD:-gh}"
 source "$ROOT/.github/scripts/lib/issue.sh"
+trap 'rm -f "${body:-}" "${comments:-}"' EXIT
 
 # 1) 提交改动(只 stage docs/ 和 skill,绝不 -A)
 git -C "$ROOT" add docs/ .claude/skills/ .hermes-pin 2>/dev/null || true
+if git -C "$ROOT" diff --cached --quiet; then
+  echo "无改动可提交,finalize 跳过(不开空 PR)" >&2
+  exit 0
+fi
 git -C "$ROOT" commit -m "auto(${cycle}): 照 work plan 同步文档" >/dev/null
 git -C "$ROOT" push -u origin "$branch" >/dev/null
 
