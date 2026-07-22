@@ -34,4 +34,5 @@ case "$route" in
     [ "$route" = proceed_flagged ] && "$GH" issue edit "$ISSUE" --add-label "flagged:待抽查"
     "$GH" workflow run hermes-sync.yml \
       -f work_plan="$work" -f cycle=sync -f issue_number="$ISSUE" -f new_tag="$NEW_TAG" ;;
+  *) echo "assess-finalize: 未知 route=$route,中止" >&2; exit 1 ;;
 esac
