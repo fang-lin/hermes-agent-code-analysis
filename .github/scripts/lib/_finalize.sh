@@ -20,6 +20,7 @@ pr="$("$GH" pr create --base main --head "$branch" \
       --title "auto(${cycle}): 文档同步" --body "见关联 issue #${issue}")"
 
 # 3) 贴 issue:评语折叠块 + 改动折叠块
+# TODO(Plan 4/wire-up): 加 ③ 标准记录块(format_record + RUN_URL + token 用量);本 plan 无 token 采集,暂缺。
 body="$(mktemp)"
 {
   comments="$(mktemp)"

@@ -18,10 +18,25 @@ trap 'rm -rf "$work" "$stub"' EXIT
 # 桩:claude 什么都不干但落一个 pass/fail 的 review 文件;gh/finalize 记录调用
 # 注:brief 原稿用 `/tmp[^ ]*review-[0-9]*.json` 抓 REVIEW_OUT 路径,但 macOS 上
 # `mktemp -d` 落在 /var/folders/.../T 下而非 /tmp,所以改成不依赖 /tmp 前缀的路径正则。
+# 另:靠 sync-rewrite.md 开头那句"hermes-agent 文档的维护者"认出这次是改写调用——
+# 若设了 SEEN_PLAN_OUT,把从 prompt 里抓到的 plan 文件路径整份 cp 出去,供测试断言
+# work plan 经 ${PLAN_FILE} 文件交接后字节是否完整(Fix 1 的回归锁)。
 cat > "$stub/claude" <<'EOF'
 #!/usr/bin/env bash
-# 从 --prompt 里认出是复核(要写 REVIEW_OUT)。参数里含 review 提示时写 verdict。
-for a in "$@"; do case "$a" in *"独立复核员"*) out=$(printf '%s\n' "$@" | grep -oE '[A-Za-z0-9_./-]+/review-[0-9]+\.json' | head -1); echo "{\"verdict\":\"${VERDICT:-pass}\",\"comments\":\"c\"}" > "$out";; esac; done
+for a in "$@"; do
+  case "$a" in
+    *"独立复核员"*)
+      out=$(printf '%s\n' "$@" | grep -oE '[A-Za-z0-9_./-]+/review-[0-9]+\.json' | head -1)
+      echo "{\"verdict\":\"${VERDICT:-pass}\",\"comments\":\"c\"}" > "$out"
+      ;;
+    *"hermes-agent 文档的维护者"*)
+      if [ -n "${SEEN_PLAN_OUT:-}" ]; then
+        plan=$(printf '%s\n' "$@" | grep -oE '[A-Za-z0-9_./-]+/plan\.json' | head -1)
+        [ -n "$plan" ] && cp "$plan" "$SEEN_PLAN_OUT"
+      fi
+      ;;
+  esac
+done
 exit 0
 EOF
 chmod +x "$stub/claude"
@@ -64,5 +79,21 @@ VERDICT=pass ORIENT_RC=1 CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
 rc=$?
 [ "$rc" -eq 3 ] || { echo "期望硬检查门挡下、轮数耗尽退出 3,实得 $rc"; exit 1; }
+
+# Case D:work plan 含 `|`,经 ${PLAN_FILE} 文件交接后必须原样到达改写 agent。
+# (Fix 1 之前 fill() 用 sed 把 WORK_PLAN 内联替换进模板、又拿 `|` 当 sed 定界符,
+#  plan 里的 `|` 会把替换串截断——这条用例就是回归锁。)
+seen_plan="$stub/seen-plan.json"; rm -f "$seen_plan"
+plan_with_pipe='[{"位置":"05 §1","现状":"a | b","改成什么":"c | d | e","源码依据":"f:1","类型":"cosmetic"}]'
+VERDICT=pass CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$work" \
+  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" FINALIZE_CMD="$stub/finalize" \
+  SEEN_PLAN_OUT="$seen_plan" \
+  WORK_PLAN="$plan_with_pipe" CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
+  bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
+rc=$?
+[ "$rc" -eq 0 ] || { echo "期望含 | 的 work plan 一次过退出 0,实得 $rc"; exit 1; }
+[ -f "$seen_plan" ] || { echo "改写 agent 应看到落地的 plan 文件(seen-plan.json 未生成)"; exit 1; }
+expected_plan="$stub/expected-plan.json"; printf '%s' "$plan_with_pipe" > "$expected_plan"
+cmp -s "$seen_plan" "$expected_plan" || { echo "work plan 经文件交接后应与原始字节一致(含 |,不能被截断)"; exit 1; }
 
 echo "test-sync-run: PASS"

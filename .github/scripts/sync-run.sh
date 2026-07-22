@@ -20,11 +20,12 @@ fi
 max="$(policy_get "$POL" '.sync.rewrite_max_rounds')"
 n_rev="$(policy_get "$POL" '.sync.reviewers')"
 tmproot="$(mktemp -d)"; trap 'rm -rf "$tmproot"' EXIT
+plan_file="$tmproot/plan.json"; printf '%s' "$WORK_PLAN" > "$plan_file"
 export WORK_PLAN PIN
 branch="auto/${CYCLE}-${GITHUB_RUN_ID:-local}"
 git -C "$ROOT" checkout -B "$branch" >/dev/null 2>&1
 
-fill() { sed -e "s|\${WORK_PLAN}|$(jq -Rs . <<<"$WORK_PLAN" | sed 's|[&/\]|\\&|g')|g" \
+fill() { sed -e "s|\${PLAN_FILE}|$plan_file|g" \
              -e "s|\${PIN}|$PIN|g" -e "s|\${REVIEW_OUT}|$2|g" \
              -e "s|\${SCHEMA}|$ROOT/.github/schemas/review-verdict.json|g" "$1"; }
 
@@ -53,7 +54,7 @@ while [ "$round" -lt "$max" ]; do
   wait
 
   # d) 全过?
-  if all_reviews_pass "$rev"; then passed=1; break; fi
+  if all_reviews_pass "$rev" "$n_rev"; then passed=1; break; fi
   echo "复核未全过,带意见再改一轮"
 done
 
@@ -64,8 +65,8 @@ if [ "$passed" != "1" ]; then
   exit 3
 fi
 
-# bump pin(仅 sync)
-if should_bump_pin "$CYCLE"; then
+# bump pin(仅 sync,且 NEW_TAG 非空——防止空 tag 把 pin 文件清空)
+if should_bump_pin "$CYCLE" && [ -n "$NEW_TAG" ]; then
   sed -i.bak "s/^tag=.*/tag=$NEW_TAG/" "$ROOT/.hermes-pin" && rm -f "$ROOT/.hermes-pin.bak"
   git -C "$ROOT" add .hermes-pin
 fi

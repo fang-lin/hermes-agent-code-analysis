@@ -1,7 +1,6 @@
 你是 hermes-agent 文档的维护者。严格照下面这份 work plan 逐条修改文档和 skill 锚点,不要多改、不要少改。
 
-work plan(JSON):
-${WORK_PLAN}
+这次要改的 work plan 是一个 JSON 数组,存在文件 ${PLAN_FILE} 里。先读这个文件拿到全部条目,再逐条修改。
 
 要求:
 1. 逐条按 `位置` 定位到 `docs/` 或 `.claude/skills/` 里的文件,把 `现状` 改成 `改成什么`。
