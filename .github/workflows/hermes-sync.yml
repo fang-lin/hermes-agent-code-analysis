@@ -9,6 +9,12 @@ on:
       new_tag:      { type: string, required: false, default: "" }
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: { required: true }
+  workflow_dispatch:
+    inputs:
+      work_plan:    { type: string, required: true }
+      cycle:        { type: string, required: true }   # sync | audit
+      issue_number: { type: string, required: true }
+      new_tag:      { type: string, required: false, default: "" }
 
 permissions:
   contents: write
