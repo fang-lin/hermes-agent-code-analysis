@@ -1,0 +1,21 @@
+enabled: true
+
+assess:
+  flag_when:
+    - complexity: deep
+    - coverage_gap_new_chapter
+    - confidence: low
+
+sync:
+  script_checks_must_pass: true
+  reviewers: 3
+  reviewers_must_all_pass: true
+  rewrite_max_rounds: 3
+  flagged_still_auto_merge: true
+
+audit:
+  enabled: true
+  schedule: weekly
+  chapters_per_run: 4
+  reentry_on_change: true
+  bumps_pin: false
