@@ -1,0 +1,17 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["errors"],
+  "properties": {
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["位置","现状","改成什么","源码依据","类型"],
+        "properties": {
+          "位置":{"type":"string"},"现状":{"type":"string"},"改成什么":{"type":"string"},
+          "源码依据":{"type":"string"},"类型":{"type":"string","enum":["shallow","deep"]}
+        }
+      }
+    }
+  }
+}
