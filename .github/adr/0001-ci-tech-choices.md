@@ -68,3 +68,24 @@ agent 用 `--output-format json` 配 `--json-schema` 产出经校验的结构化
 | 6 | ledger 更新走 PR | 守住不直接 push 主分支 |
 
 有三处不确定留到构建时实测:一是 claude-code-action 里订阅 token 是否全程顺畅,二是 `workflow_call` 配 claude-code-action 的端到端,三是大 diff 下 `gh compare` 的分页和体积上限。
+
+---
+
+## 实现阶段的细化(2026-07,四个 plan 建完后回填)
+
+真正把四条工作流建出来、逐个交叉复核之后,对上面几条决定做了如下细化,并新增一条"上线前必须做"的硬要求。
+
+**决定一细化 —— agent 一律用 headless `claude -p`,不用 claude-code-action。** "改写↔复核"要在 bash 循环里反复调、matrix 里逐 job 调,`claude -p` 更好套;两者都是非 bare + 订阅 token,决定一的核心理由不变,还顺带绕开了"action 里订阅 token 顺不顺"那处不确定。
+
+**决定四细化 —— ③ 同时开 `workflow_call` 和 `workflow_dispatch`。** ② 和复核循环用 `gh workflow run hermes-sync.yml` 派发它,走的是 `workflow_dispatch`;两个触发口共用同一个 job(job 读 `inputs.*`,两种触发都适用)。`secrets:` 块只对 `workflow_call` 生效,`workflow_dispatch` 触发时 job 直接从仓库 secret 读 `CLAUDE_CODE_OAUTH_TOKEN`。work plan 常规走输入;超长时退回"贴 issue、③ 从 issue 读"(尚未实现,留作后续)。
+
+**新增决定七(上线前硬要求)—— 每个跑 agent 的 job 必须先 checkout 被 pin 的 hermes-agent 源码。** 这是复核/评估能不能真正验证的命门。`hermes-agent` 在本仓是 git-ignored、CI 里根本不存在;而所有 agent(③ 的改写/复核、② 的区域评估、复核循环的通盘复核)以及 `check-anchors.sh`/`orient.sh` 都要 grep"真源码"。约定:源码根以含 `run_agent.py` 为准,锚点都是相对该根的裸路径(如 `gateway/run.py`)。所以每个 agent job 要加一步,按合适的 tag 把 `NousResearch/hermes-agent` 浅克隆到一个 `run_agent.py` 在根的目录,再把该路径传给脚本和提示。**用哪个 tag 分流程**:③ 的 sync 循环和 ② 用新版本 tag(要把文档对到新版本);复核循环用当前 pin(核对现有文档对不对)。这一步只有连着真 agent + secret + 能访问上游仓库时才跑得起来,所以放到各 plan 的 smoke 阶段落地并验证,但**必须在第一次真跑前完成**,不能藏在"以后再说"里。
+
+**构建期间交叉复核抓出、且已在代码里落实的加固(供后续维护参考,别再退回):**
+- **写 `$GITHUB_OUTPUT` 的 JSON 一律 `jq -sc` 单行** —— 多行值会被 `key=value` 形式截断,让 matrix 拿到坏输入、悄悄跑空。
+- **jq 访问中文字段用 `.["类型"]` 括号写法** —— 点号 `.类型` 在 jq 1.7 是编译错误,`set -uo pipefail` 下静默失败、默认 0/空。
+- **`gh` / 外部调用失败必须 fail-safe 或大声中止** —— 不能把"调用失败"和"结果为空"混为一谈(assess-prep gh 失败、chapter_source_changed gh 失败、audit-prep 缺配置,都改成了要么大声退出、要么按"需处理"兜底)。
+- **kill-switch(`.enabled` / `.audit.enabled`)要在每个花 token 的阶段顶部就查** —— 不能只靠 ③ 兜底,否则关了开关 ② 照样烧 token。
+- **matrix 加 `fail-fast: false`,finalize 用容错的 `if:`** —— 一个 flaky 分支不能取消其它分支、更不能跳过 finalize 让整轮白跑;finalize 只盖"确实有复核结果"的部分,其余留待下轮。
+- **绝不把 `${{ }}` 直插进 `run:` 脚本文本** —— 上游 tag 名可含 shell 元字符,直插 = 脚本注入;一律走 `env:` 变量再 `"$VAR"` 读。
+- **测试全用一次性 mktemp 仓库,绝不碰真仓、绝不真 push** —— 构建早期有个测试真往 origin 推了个垃圾提交,之后所有涉及 git 的测试都改成在临时仓里跑,并在跑后断言真仓分支/状态没变。
