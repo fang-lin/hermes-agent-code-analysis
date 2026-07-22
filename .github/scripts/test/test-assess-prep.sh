@@ -14,4 +14,14 @@ out="$(GH_CMD="$stub/gh" REPO_ROOT="$root" PIN=vA NEW_TAG=vB bash "$root/.github
 # 区域集合应含 ch05、ch01、gap
 assert_eq "3" "$(jq 'length' <<<"$out")" "应有 3 个区域(ch05/ch01/gap)"
 assert_eq "brand_new/y.py" "$(jq -r '.[]|select(.region=="gap").files[0]' <<<"$out")" "缺口文件对"
+
+# gh 调用失败时必须大声失败,不能悄悄输出 []
+cat > "$stub/gh-fail" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "$stub/gh-fail"
+GH_CMD="$stub/gh-fail" REPO_ROOT="$root" PIN=vA NEW_TAG=vB bash "$root/.github/scripts/assess-prep.sh" >/dev/null 2>&1
+assert_eq "1" "$?" "gh 失败应退出非0,不能输出 []"
+
 echo "test-assess-prep: PASS"

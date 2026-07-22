@@ -7,8 +7,11 @@ source "$ROOT/.github/scripts/lib/srcmap.sh"
 
 # 取改动文件清单(仅文件名)。gh api compare 分页上限 300,超了要翻页——此处先取第一页,
 # 构建时若 files 数达 300 需补 --paginate(见 Self-Review 待实测)。
-files="$("$GH" api "repos/NousResearch/hermes-agent/compare/${PIN}...${NEW_TAG}" \
-          --jq '.files[].filename')"
+if ! files="$("$GH" api "repos/NousResearch/hermes-agent/compare/${PIN}...${NEW_TAG}" \
+          --jq '.files[].filename')"; then
+  echo "assess-prep: gh compare 调用失败(pin=$PIN new=$NEW_TAG),中止" >&2
+  exit 1
+fi
 
 declare -A byreg; gaps=""
 while IFS= read -r f; do
