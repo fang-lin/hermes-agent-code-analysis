@@ -4,7 +4,7 @@ format_record() {
   local layer="$1" run_url="$2" kv_file="$3"
   printf '### [%s] · %s\n' "$layer" "$run_url"
   local line
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     [ -n "$line" ] || continue
     printf -- '- %s:%s\n' "${line%%=*}" "${line#*=}"
   done < "$kv_file"
