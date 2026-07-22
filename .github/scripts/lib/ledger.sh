@@ -3,7 +3,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/srcmap.sh"
 # docs/zh/<ch>*.md 的最近 commit
 chapter_doc_commit() {
   local ch="$1" docs="${2:-docs/zh}"
-  git log -1 --format=%H -- "$docs/$ch"*.md 2>/dev/null
+  # -C "$docs":git 必须在 $docs 所在的仓里跑,不能依赖进程 cwd——
+  # 调用方(如 audit-finalize.sh)常把 REPO_ROOT 设成和 cwd 不同的仓,
+  # 这时 "git log -- <docs之外的绝对路径>" 会以 exit 128 失败、被 2>/dev/null 吞掉,
+  # 悄悄回显空字符串,导致该章永远盖不上章(is_pending 把 "" 当成"变了")。
+  git -C "$docs" log -1 --format=%H -- "$docs/$ch"*.md 2>/dev/null
 }
 
 # 记录里该章 pin → cur_pin 之间,该章地盘下有没有改动(gh compare 过滤)

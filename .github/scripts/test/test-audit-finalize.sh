@@ -55,6 +55,14 @@ git -C "$work" log "$main_branch" --oneline | grep -q "audit: 盖章" \
 #     06 没有 review 文件(matrix 腿崩了)→ 不盖章,留 pending,并发提醒评论。
 assert_eq "pass" "$(jq -r '."05".result' "$work/audit-ledger.json")" "05 应盖章 pass"
 assert_eq "vNow" "$(jq -r '."05".pin' "$work/audit-ledger.json")" "05 应写入本轮 pin"
+# doc_commit 必须是 $work 仓里 05*.md 的真实 commit hash(非空)——
+# chapter_doc_commit 内部的 git 若跑在了错的仓(比如进程 cwd 那个仓)会
+# exit 128 被吞掉、悄悄回显空串,is_pending 会把 "" 当成"文档变了",
+# 该章永远盖不上章、卡在复核队列里出不去。用绝对路径 glob 避免让 shell
+# 按当前 cwd(而不是 $work)展开 05*.md。
+real_doc_commit="$(git -C "$work" log -1 --format=%H -- "$work/docs/zh/05"*.md)"
+[ -n "$real_doc_commit" ] || { echo "测试前提坏了:真实仓里 05 的 doc_commit 查不到"; exit 1; }
+assert_eq "$real_doc_commit" "$(jq -r '."05".doc_commit' "$work/audit-ledger.json")" "05 应盖上真实 doc_commit(非空)"
 assert_eq "false" "$(jq 'has("06")' "$work/audit-ledger.json")" "06 无复核结果,不该被盖章"
 grep -q "复核结果缺失" "$full" || { echo "有章缺复核结果,应有 issue comment 提醒下轮重试"; exit 1; }
 
