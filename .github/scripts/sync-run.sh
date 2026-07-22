@@ -3,6 +3,8 @@ set -uo pipefail
 ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 CLAUDE="${CLAUDE_CMD:-claude}"
 GH="${GH_CMD:-gh}"
+CHECK_ANCHORS="${CHECK_ANCHORS_CMD:-$ROOT/.claude/skills/hermes-agent-expert/scripts/check-anchors.sh}"
+ORIENT="${ORIENT_CMD:-$ROOT/.claude/skills/hermes-agent-expert/scripts/orient.sh}"
 source "$ROOT/.github/scripts/lib/policy.sh"
 source "$ROOT/.github/scripts/lib/aggregate.sh"
 source "$ROOT/.github/scripts/lib/decide.sh"
@@ -16,7 +18,7 @@ fi
 
 max="$(policy_get "$POL" '.sync.rewrite_max_rounds')"
 n_rev="$(policy_get "$POL" '.sync.reviewers')"
-work="$(mktemp -d)"; echo "$WORK_PLAN" > "$work/plan.json"
+tmproot="$(mktemp -d)"; trap 'rm -rf "$tmproot"' EXIT
 export WORK_PLAN PIN
 branch="auto/${CYCLE}-${GITHUB_RUN_ID:-local}"
 git -C "$ROOT" checkout -B "$branch" >/dev/null 2>&1
@@ -36,14 +38,13 @@ while [ "$round" -lt "$max" ]; do
 
   # b) 脚本硬检查
   if [ "$(policy_get "$POL" '.sync.script_checks_must_pass')" = "true" ]; then
-    if ! bash "$ROOT/.claude/skills/hermes-agent-expert/scripts/check-anchors.sh" \
-      && bash "$ROOT/.claude/skills/hermes-agent-expert/scripts/orient.sh"; then
+    if ! bash "$CHECK_ANCHORS" || ! bash "$ORIENT"; then
       echo "脚本硬检查未过,重来一轮"; continue
     fi
   fi
 
   # c) 并行 3 个复核
-  rev="$(mktemp -d)"
+  rev="$tmproot/round-$round"; mkdir -p "$rev"
   for i in $(seq 1 "$n_rev"); do
     "$CLAUDE" -p "$(fill "$ROOT/.github/prompts/sync-review.md" "$rev/review-$i.json")" \
       --permission-mode acceptEdits --allowedTools "Read,Write,Bash(grep:*),Grep,Glob" &

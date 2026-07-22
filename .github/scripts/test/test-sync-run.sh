@@ -32,8 +32,13 @@ EOF
 chmod +x "$stub/claude"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$stub/gh"; chmod +x "$stub/gh"
 
+# 脚本硬检查的桩:退出码由环境变量控制,默认都过。
+printf '#!/usr/bin/env bash\nexit "${ANCHORS_RC:-0}"\n' > "$stub/check-anchors.sh"; chmod +x "$stub/check-anchors.sh"
+printf '#!/usr/bin/env bash\nexit "${ORIENT_RC:-0}"\n' > "$stub/orient.sh"; chmod +x "$stub/orient.sh"
+
 # 一次过
 VERDICT=pass CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" \
+  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" \
   WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
 rc=$?
@@ -41,9 +46,20 @@ rc=$?
 
 # 轮数耗尽(复核恒 fail)
 VERDICT=fail CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" \
+  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" \
   WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
 rc=$?
 [ "$rc" -eq 3 ] || { echo "期望耗尽退出 3,实得 $rc"; exit 1; }
+
+# 硬检查门:orient 恒失败,即便复核恒过,也必须轮数耗尽退出 3
+# (Fix 1 之前 `! A && B` 只在 A 失败且 B 成功时才判定不过,B 失败时误判为过,
+#  这个用例会误得 0;修复后必须是 3。)
+VERDICT=pass ORIENT_RC=1 CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" \
+  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" \
+  WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
+  bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
+rc=$?
+[ "$rc" -eq 3 ] || { echo "期望硬检查门挡下、轮数耗尽退出 3,实得 $rc"; exit 1; }
 
 echo "test-sync-run: PASS"
