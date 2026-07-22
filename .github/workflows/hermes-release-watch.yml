@@ -21,9 +21,11 @@ jobs:
           echo "status=$out" >> "$GITHUB_OUTPUT"
       - name: 新版本 → 开 issue + 触发 ②
         if: startsWith(steps.chk.outputs.status, 'NEW')
-        env: { GH_TOKEN: "${{ github.token }}" }
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          STATUS: ${{ steps.chk.outputs.status }}
         run: |
-          tag="$(echo '${{ steps.chk.outputs.status }}' | awk '{print $2}')"
+          tag="$(printf '%s' "$STATUS" | awk '{print $2}')"
           gh label create sync-cycle --color 0E8A16 2>/dev/null || true
           issue="$(gh issue create --title "sync: $tag" --label sync-cycle \
             --body "上游新版本 $tag,启动同步。" --json number --jq .number)"

@@ -20,10 +20,12 @@ jobs:
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
       - id: p
-        env: { GH_TOKEN: "${{ github.token }}" }
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          NEW_TAG: ${{ inputs.new_tag }}
         run: |
           PIN="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
-          regions="$(PIN="$PIN" NEW_TAG='${{ inputs.new_tag }}' bash .github/scripts/assess-prep.sh)"
+          regions="$(PIN="$PIN" NEW_TAG="$NEW_TAG" bash .github/scripts/assess-prep.sh)"
           echo "regions=$regions" >> "$GITHUB_OUTPUT"
           echo "region_count=$(echo "$regions" | jq 'length')" >> "$GITHUB_OUTPUT"
 
