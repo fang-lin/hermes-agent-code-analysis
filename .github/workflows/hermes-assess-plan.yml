@@ -1,0 +1,69 @@
+name: hermes 评估+规划
+
+on:
+  workflow_dispatch:
+    inputs:
+      new_tag:      { type: string, required: true }
+      issue_number: { type: string, required: true }
+
+permissions: { contents: read, issues: write, pull-requests: write }
+
+jobs:
+  prep:
+    runs-on: ubuntu-latest
+    outputs:
+      regions: ${{ steps.p.outputs.regions }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - id: p
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          PIN="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
+          regions="$(PIN="$PIN" NEW_TAG='${{ inputs.new_tag }}' bash .github/scripts/assess-prep.sh)"
+          echo "regions=$regions" >> "$GITHUB_OUTPUT"
+
+  assess:
+    needs: prep
+    if: ${{ needs.prep.outputs.regions != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        region: ${{ fromJSON(needs.prep.outputs.regions) }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: curl -fsSL https://claude.ai/install.sh | bash; echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: 评估一个区域
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          REGION: ${{ matrix.region.region }}
+          FILES: ${{ toJSON(matrix.region.files) }}
+          NEW_TAG: ${{ inputs.new_tag }}
+        run: |
+          PIN="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
+          OUT="region-${REGION}.json"
+          prompt="$(REGION="$REGION" FILES="$FILES" PIN="$PIN" NEW_TAG="$NEW_TAG" \
+            OUT="$OUT" SCHEMA=.github/schemas/region-assessment.json \
+            envsubst < .github/prompts/assess-region.md)"
+          claude -p "$prompt" --permission-mode acceptEdits \
+            --allowedTools "Read,Write,Bash(grep:*),Grep,Glob"
+      - uses: actions/upload-artifact@v4
+        with: { name: "region-${{ matrix.region.region }}", path: "region-*.json" }
+
+  finalize:
+    needs: [prep, assess]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: regions, merge-multiple: true }
+      - name: 挑错 + 定去向 + 派发
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ inputs.issue_number }}
+          NEW_TAG: ${{ inputs.new_tag }}
+        run: bash .github/scripts/assess-finalize.sh regions
