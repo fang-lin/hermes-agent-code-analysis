@@ -6,13 +6,18 @@ source "$ROOT/.github/scripts/lib/ledger.sh"
 LEDGER="$ROOT/audit-ledger.json"; MAP="$ROOT/.github/chapter-source-map.yml"
 POL="${POL:-$ROOT/.github/sync-policy.yml}"; DOCS="$ROOT/docs/zh"
 
-# 总开关(kill-switch):sync-policy.yml enabled:false 时复核矩阵也不该跑
-if [ "$(policy_get "$POL" '.enabled')" != "true" ]; then
-  printf '[]'
+# 总开关(kill-switch):sync-policy.yml 顶层 enabled:false,或复核这一环
+# 自己的 audit.enabled:false,都不该跑复核矩阵
+if [ "$(policy_get "$POL" '.enabled')" != "true" ] || [ "$(policy_get "$POL" '.audit.enabled')" != "true" ]; then
+  printf '[]\n'
   exit 0
 fi
 
 limit="$(policy_get "$POL" '.audit.chapters_per_run')"
+if [ -z "$limit" ]; then
+  echo "audit-prep: sync-policy .audit.chapters_per_run 缺失或为空,中止" >&2
+  exit 1
+fi
 
 pending=()
 # 章号来自对照表的 keys(有源码地盘的章);逐章判 pending
