@@ -6,7 +6,7 @@ on:
       new_tag:      { type: string, required: true }
       issue_number: { type: string, required: true }
 
-permissions: { contents: read, issues: write, pull-requests: write }
+permissions: { contents: read, issues: write, pull-requests: write, actions: write }
 
 jobs:
   prep:
@@ -32,6 +32,7 @@ jobs:
     if: ${{ needs.prep.outputs.regions != '[]' }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         region: ${{ fromJSON(needs.prep.outputs.regions) }}
     steps:

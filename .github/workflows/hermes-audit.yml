@@ -5,7 +5,7 @@ on:
     - cron: "0 7 * * 1"   # 每周一 07:00 UTC
   workflow_dispatch: {}
 
-permissions: { contents: write, issues: write, pull-requests: write }
+permissions: { contents: write, issues: write, pull-requests: write, actions: write }
 
 jobs:
   prep:
@@ -37,6 +37,7 @@ jobs:
     if: ${{ needs.prep.outputs.chapters != '[]' }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         chapter: ${{ fromJSON(needs.prep.outputs.chapters) }}
     steps:
@@ -58,6 +59,7 @@ jobs:
 
   finalize:
     needs: [prep, review]
+    if: ${{ !cancelled() && needs.prep.result == 'success' && needs.prep.outputs.chapters != '[]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
