@@ -36,17 +36,28 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$stub/gh"; chmod +x "$stub/gh"
 printf '#!/usr/bin/env bash\nexit "${ANCHORS_RC:-0}"\n' > "$stub/check-anchors.sh"; chmod +x "$stub/check-anchors.sh"
 printf '#!/usr/bin/env bash\nexit "${ORIENT_RC:-0}"\n' > "$stub/orient.sh"; chmod +x "$stub/orient.sh"
 
+# _finalize 的桩:必须桩掉,绝不能让真的 _finalize.sh 跑起来 —— 它内部是裸
+# `git commit` + `git push -u origin`,不走任何可注入的 CMD,一旦在这个测试
+# 用的真仓(REPO_ROOT="$root")上跑真的会把提交推到真的 origin 远端。
+# (回归教训:sync-run.sh 曾经硬编码调用真 _finalize.sh 路径,这个测试跑"一次过"
+#  分支时就真的 commit+push 到了 origin/auto/sync-local。现在 sync-run.sh 改成
+#  读 FINALIZE_CMD 可注入,这里桩成什么都不干,只记一条调用日志。)
+finalize_log="$stub/finalize-calls"
+printf '#!/usr/bin/env bash\necho "finalize $*" >> %q\nexit 0\n' "$finalize_log" > "$stub/finalize"
+chmod +x "$stub/finalize"
+
 # 一次过
 VERDICT=pass CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" \
-  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" \
+  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" FINALIZE_CMD="$stub/finalize" \
   WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
 rc=$?
 [ "$rc" -eq 0 ] || { echo "期望一次过退出 0,实得 $rc"; exit 1; }
+grep -q "finalize" "$finalize_log" 2>/dev/null || { echo "一次过应调用 finalize(桩)"; exit 1; }
 
 # 轮数耗尽(复核恒 fail)
 VERDICT=fail CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" \
-  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" \
+  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" FINALIZE_CMD="$stub/finalize" \
   WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
 rc=$?
@@ -56,7 +67,7 @@ rc=$?
 # (Fix 1 之前 `! A && B` 只在 A 失败且 B 成功时才判定不过,B 失败时误判为过,
 #  这个用例会误得 0;修复后必须是 3。)
 VERDICT=pass ORIENT_RC=1 CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" \
-  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" \
+  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" FINALIZE_CMD="$stub/finalize" \
   WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
 rc=$?

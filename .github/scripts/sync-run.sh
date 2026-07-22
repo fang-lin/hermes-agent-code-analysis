@@ -5,6 +5,7 @@ CLAUDE="${CLAUDE_CMD:-claude}"
 GH="${GH_CMD:-gh}"
 CHECK_ANCHORS="${CHECK_ANCHORS_CMD:-$ROOT/.claude/skills/hermes-agent-expert/scripts/check-anchors.sh}"
 ORIENT="${ORIENT_CMD:-$ROOT/.claude/skills/hermes-agent-expert/scripts/orient.sh}"
+FINALIZE="${FINALIZE_CMD:-$ROOT/.github/scripts/lib/_finalize.sh}"
 source "$ROOT/.github/scripts/lib/policy.sh"
 source "$ROOT/.github/scripts/lib/aggregate.sh"
 source "$ROOT/.github/scripts/lib/decide.sh"
@@ -70,4 +71,4 @@ if should_bump_pin "$CYCLE"; then
 fi
 
 # 贴 issue 明细(评语 + 改动),开 PR,自动合并
-"$ROOT/.github/scripts/lib/_finalize.sh" "$rev" "$branch" "$ISSUE" "$CYCLE"
+"$FINALIZE" "$rev" "$branch" "$ISSUE" "$CYCLE"
