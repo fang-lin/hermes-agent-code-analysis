@@ -1,0 +1,8 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["overturned", "findings"],
+  "properties": {
+    "overturned": { "type": "boolean" },
+    "findings": { "type": "array", "items": { "type": "string" } }
+  }
+}
