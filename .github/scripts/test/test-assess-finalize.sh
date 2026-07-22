@@ -30,4 +30,16 @@ CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" ISSUE=1 NEW_TAG=vB
   bash "$root/.github/scripts/assess-finalize.sh" "$d" >/dev/null 2>&1
 grep -q "gh issue edit" "$log" || { echo "proceed_flagged应加标签"; exit 1; }
 grep -q "gh workflow run" "$log" || { echo "proceed_flagged应派发工作流"; exit 1; }
+
+# 场景D:EXPECTED_REGIONS 守卫——只到 1 个区域结果,但 prep 算出预期 2 个 →
+# 不能当"无影响"悄悄关闭,必须报错退出、评论 + 打标签转人工
+: > "$log"; d="$stub/d"; mkdir -p "$d"
+echo '{"complexity":"shallow","plan_items":[{"位置":"x","现状":"a","改成什么":"b","源码依据":"f:1","类型":"shallow"}]}' > "$d/region-1.json"
+CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" ISSUE=1 NEW_TAG=vB EXPECTED_REGIONS=2 \
+  bash "$root/.github/scripts/assess-finalize.sh" "$d" >/dev/null 2>&1
+rc=$?
+[ "$rc" -ne 0 ] || { echo "区域数不足应非0退出"; exit 1; }
+grep -q "gh issue close" "$log" && { echo "区域数不足不应 close"; exit 1; }
+grep -q "gh issue comment" "$log" || { echo "区域数不足应评论说明"; exit 1; }
+grep -q "gh issue edit" "$log" || { echo "区域数不足应加 flagged:待抽查 标签"; exit 1; }
 echo "test-assess-finalize: PASS"

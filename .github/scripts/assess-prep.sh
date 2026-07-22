@@ -4,6 +4,14 @@ ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 GH="${GH_CMD:-gh}"
 MAP="${MAP:-$ROOT/.github/chapter-source-map.yml}"
 source "$ROOT/.github/scripts/lib/srcmap.sh"
+source "$ROOT/.github/scripts/lib/policy.sh"
+
+# 0) 总开关(kill-switch):sync-policy.yml enabled:false 时①的评估矩阵也不该跑
+POLICY_FILE="${POLICY_FILE:-$ROOT/.github/sync-policy.yml}"
+if [ "$(policy_get "$POLICY_FILE" '.enabled')" != "true" ]; then
+  printf '[]'
+  exit 0
+fi
 
 # 取改动文件清单(仅文件名)。gh api compare 分页上限 300,超了要翻页——此处先取第一页,
 # 构建时若 files 数达 300 需补 --paginate(见 Self-Review 待实测)。
@@ -28,12 +36,12 @@ done <<< "$files"
   for reg in "${!byreg[@]}"; do
     [ "$first" = 1 ] && first=0 || printf ','
     printf '{"region":"%s","files":%s}' "$reg" \
-      "$(printf '%s' "${byreg[$reg]}" | jq -R . | jq -s 'map(select(length>0))')"
+      "$(printf '%s' "${byreg[$reg]}" | jq -R . | jq -sc 'map(select(length>0))')"
   done
   if [ -n "$gaps" ]; then
     [ "$first" = 1 ] || printf ','
     printf '{"region":"gap","files":%s}' \
-      "$(printf '%s' "$gaps" | jq -R . | jq -s 'map(select(length>0))')"
+      "$(printf '%s' "$gaps" | jq -R . | jq -sc 'map(select(length>0))')"
   fi
   printf ']'
 }
