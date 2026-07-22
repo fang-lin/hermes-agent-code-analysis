@@ -1,0 +1,46 @@
+name: hermes 同步引擎(可复用)
+
+on:
+  workflow_call:
+    inputs:
+      work_plan:    { type: string, required: true }
+      cycle:        { type: string, required: true }   # sync | audit
+      issue_number: { type: string, required: true }
+      new_tag:      { type: string, required: false, default: "" }
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: { required: true }
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: 装 yq / claude
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: 跑单测(自检)
+        run: for t in .github/scripts/test/test-*.sh; do bash "$t"; done
+      - name: 同步
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          WORK_PLAN: ${{ inputs.work_plan }}
+          CYCLE: ${{ inputs.cycle }}
+          ISSUE: ${{ inputs.issue_number }}
+          NEW_TAG: ${{ inputs.new_tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git config user.name "hermes-sync-bot"
+          git config user.email "actions@github.com"
+          PIN="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
+          export PIN
+          bash .github/scripts/sync-run.sh
