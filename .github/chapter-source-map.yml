@@ -1,0 +1,18 @@
+# 每章覆盖哪些顶层源码路径前缀。前缀匹配(path 以某前缀开头即算该章覆盖)。
+# 只列"有源码地盘"的章;纯综述章(00)覆盖仓库根的少量文件。
+chapters:
+  "00": ["README", "pyproject.toml", "hermes-agent/README"]
+  "01": ["hermes_cli/"]
+  "02": ["hermes_agent/agent/", "hermes_agent/lsp/", "hermes_agent/transports/"]
+  "03": ["hermes_agent/tools/", "hermes_agent/environments/"]
+  "04": ["hermes_agent/skills/"]
+  "05": ["gateway/"]
+  "06": ["acp_adapter/", "mcp_serve/"]
+  "07": ["hermes_agent/plugins/"]
+  "08": ["plugins/"]
+  "09": ["kanban/"]
+  "10": ["hermes_agent/interaction/", "hermes_agent/run_modes/"]
+  "11": ["cron/"]
+  "12": ["batch/", "trajectory/"]
+  "13": ["scripts/", ".github/"]
+  "14": ["apps/desktop/", "bootstrap-installer/", "shared/"]

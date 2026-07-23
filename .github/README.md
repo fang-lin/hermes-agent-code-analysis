@@ -257,17 +257,20 @@ audit:
 
 # 文件清单和进度
 
+四条工作流的代码已按下面这份设计建完,都在 `feat/hermes-auto-sync` 分支上,每个脚本都配了单元测试(用一次性仓库、桩掉 agent/gh,零真实副作用)。逐个 task 交叉复核 + 每条循环整分支终审,一路修掉了十几个真 bug(细节见 ADR 的加固清单)。
+
 | 文件 | 属于哪块 | 状态 |
 |------|---------|------|
-| `.hermes-pin` · `hermes-release-watch.sh` · `hermes-release-watch.yml` | ① 新版本检测 | ✅ 已建(逻辑待按新设计改) |
-| `hermes-assess-plan.yml`(多 agent 评估+规划) | ② 评估+规划 | ⬜ 待建 |
-| 每章"源码地盘"对照表(② 第 2 步用) | ② 评估+规划 | ⬜ 待建 |
-| `hermes-sync.yml`(改写 + 复核 + 合并,两条循环共用) | ③ 同步 | ⬜ 待建 |
-| `hermes-audit.yml`(挑待复核的章 → factual-reviewer 通盘复核 → 交 ③) | 复核循环 | ⬜ 待建 |
-| `audit-ledger.json`(复核记录表) | 复核循环 | ⬜ 待建 |
-| `sync-policy.yml`(总开关 + 各阶段规则 + 复核节奏 + 标签定义) | 横切 | ⬜ 待建 |
+| `.hermes-pin` · `hermes-release-watch.sh` · `hermes-release-watch.yml` | ① 新版本检测 | ✅ 已建(新设计) |
+| `hermes-assess-plan.yml` + `assess-prep.sh` · `assess-finalize.sh` · `lib/assess-agg.sh` · `lib/srcmap.sh` · `chapter-source-map.yml` + schemas/prompts | ② 评估+规划 | ✅ 已建 |
+| `hermes-sync.yml` + `sync-run.sh` · `lib/{policy,aggregate,decide,issue,_finalize}.sh` + schemas/prompts | ③ 同步 | ✅ 已建 |
+| `hermes-audit.yml` + `audit-prep.sh` · `audit-finalize.sh` · `lib/ledger.sh` · `audit-ledger.json` + schema/prompt | 复核循环 | ✅ 已建 |
+| `sync-policy.yml`(总开关 + 各阶段规则 + 复核节奏) | 横切 | ✅ 已建 |
 
-③ 启用之前,有一步只能你亲自做:在本地跑 `claude setup-token`,登录你的 Max 账号生成一个一年期的 token,再把它加成仓库的 secret `CLAUDE_CODE_OAUTH_TOKEN`。用这个(而不是 `ANTHROPIC_API_KEY`)就走订阅额度、不额外按 token 计费。要留意的是,这份额度和你平时在终端用 Claude Code 是同一份(共用那个 5 小时 / 每周的窗口),token 大约一年换一次。
+**第一次真跑前还差两件事**(都要连着真 agent 才验证得了,所以都在各循环的 smoke 阶段落地):
+
+1. **加 secret(只能你做)**:本地跑 `claude setup-token`,登录 Max 账号生成一年期 token,加成仓库 secret `CLAUDE_CODE_OAUTH_TOKEN`。用它(而不是 `ANTHROPIC_API_KEY`)走订阅额度、不额外按 token 计费;注意这份额度和你平时在终端用 Claude Code 是同一份(共用 5 小时 / 每周窗口),token 约一年换一次。
+2. **给每个 agent job 加"checkout 被 pin 的 hermes-agent 源码"步骤**:agent 要 grep 真源码才能核对,而 `hermes-agent` 在 CI 里不存在。详见 ADR 的"新增决定七"。这一步在 smoke 时随真链路一起接上、验证。
 
 ## 实现选型
 

@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "comments"],
+  "properties": {
+    "verdict": { "type": "string", "enum": ["pass", "fail"] },
+    "comments": { "type": "string", "minLength": 1 }
+  }
+}

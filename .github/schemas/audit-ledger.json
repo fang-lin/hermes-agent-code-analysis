@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "additionalProperties": {
+    "type": "object", "additionalProperties": false,
+    "required": ["pin", "doc_commit", "result"],
+    "properties": {
+      "pin": {"type":"string"}, "doc_commit": {"type":"string"},
+      "result": {"type":"string","enum":["pass"]}
+    }
+  }
+}

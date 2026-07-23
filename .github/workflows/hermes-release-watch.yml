@@ -1,57 +1,32 @@
 name: hermes 新版本检测
 
-# 阶段① 新版本检测 — 每天跑,纯脚本,不用 LLM、不花 token。
-# Checks whether NousResearch/hermes-agent has a release newer than .hermes-pin.
-# On a new release: runs the skill's mechanical checks and opens/updates a "drift" issue.
-# It never changes docs or the pin. Inert while the pin equals the latest release.
-
 on:
   schedule:
-    - cron: "0 6 * * *"   # daily 06:00 UTC
-  workflow_dispatch:
+    - cron: "0 6 * * *"   # 每天 06:00 UTC
+  workflow_dispatch: {}
 
-permissions:
-  contents: read
-  issues: write
+permissions: { contents: read, issues: write, actions: write }
 
-concurrency:
-  group: hermes-release-watch
-  cancel-in-progress: false
+concurrency: { group: hermes-release-watch, cancel-in-progress: false }
 
 jobs:
   watch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Run release-watch sentinel
-        id: sentinel
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - id: chk
+        env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          set -uo pipefail
-          out="$(bash .github/scripts/hermes-release-watch.sh)"; rc=$?
-          echo "$out"
-          [ "$rc" -ne 0 ] && { echo "sentinel failed (rc=$rc)"; exit "$rc"; }
-          echo "status=$(printf '%s\n' "$out" | head -1)" >> "$GITHUB_OUTPUT"
-
-      - name: Open or update drift issue
-        if: startsWith(steps.sentinel.outputs.status, 'DRIFT')
+          out="$(bash .github/scripts/hermes-release-watch.sh)"; echo "$out"
+          echo "status=$out" >> "$GITHUB_OUTPUT"
+      - name: 新版本 → 开 issue + 触发 ②
+        if: startsWith(steps.chk.outputs.status, 'NEW')
         env:
-          GH_TOKEN: ${{ github.token }}
-          STATUS: ${{ steps.sentinel.outputs.status }}
+          GH_TOKEN: "${{ github.token }}"
+          STATUS: ${{ steps.chk.outputs.status }}
         run: |
-          set -euo pipefail
           tag="$(printf '%s' "$STATUS" | awk '{print $2}')"
-          title="hermes drift: $tag"
-          gh label create hermes-drift --color FBCA04 \
-            --description "Upstream hermes release ahead of the docs pin" 2>/dev/null || true
-          num="$(gh issue list --state open --search "$title in:title" --json number,title \
-                 --jq ".[] | select(.title==\"$title\") | .number" | head -1)"
-          if [ -n "$num" ]; then
-            gh issue comment "$num" --body-file hermes-drift-report.md
-            echo "updated existing issue #$num"
-          else
-            gh issue create --title "$title" --label hermes-drift --body-file hermes-drift-report.md
-            echo "created new issue"
-          fi
+          gh label create sync-cycle --color 0E8A16 2>/dev/null || true
+          issue="$(gh issue create --title "sync: $tag" --label sync-cycle \
+            --body "上游新版本 $tag,启动同步。" --json number --jq .number)"
+          gh workflow run hermes-assess-plan.yml -f new_tag="$tag" -f issue_number="$issue"

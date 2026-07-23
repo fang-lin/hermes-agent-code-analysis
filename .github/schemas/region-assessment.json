@@ -1,0 +1,20 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["complexity", "reason", "plan_items"],
+  "properties": {
+    "complexity": { "type": "string", "enum": ["none", "cosmetic", "shallow", "deep"] },
+    "reason": { "type": "string", "minLength": 1 },
+    "plan_items": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["位置", "现状", "改成什么", "源码依据", "类型"],
+        "properties": {
+          "位置": {"type":"string"}, "现状": {"type":"string"},
+          "改成什么": {"type":"string"}, "源码依据": {"type":"string"},
+          "类型": {"type":"string","enum":["cosmetic","shallow","deep","new-chapter","new-section","new-anchor"]}
+        }
+      }
+    }
+  }
+}

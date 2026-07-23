@@ -1,0 +1,82 @@
+name: hermes 定期复核
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"   # 每周一 07:00 UTC
+  workflow_dispatch: {}
+
+permissions: { contents: write, issues: write, pull-requests: write, actions: write }
+
+jobs:
+  prep:
+    runs-on: ubuntu-latest
+    outputs:
+      chapters: ${{ steps.p.outputs.chapters }}
+      issue: ${{ steps.p.outputs.issue }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - id: p
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          PIN="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
+          chapters="$(REPO_ROOT="$PWD" PIN="$PIN" bash .github/scripts/audit-prep.sh)"
+          echo "chapters=$chapters" >> "$GITHUB_OUTPUT"
+          if [ "$chapters" != "[]" ]; then
+            gh label create audit-cycle --color 5319E7 2>/dev/null || true
+            n="$(gh issue create --title "audit: $(date -u +%F)" --label audit-cycle \
+                 --body "本轮复核:$chapters" --json number --jq .number 2>/dev/null || echo 0)"
+            echo "issue=$n" >> "$GITHUB_OUTPUT"
+          fi
+
+  review:
+    needs: prep
+    if: ${{ needs.prep.outputs.chapters != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chapter: ${{ fromJSON(needs.prep.outputs.chapters) }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: curl -fsSL https://claude.ai/install.sh | bash; echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: 拉取被 pin 的 hermes-agent 源码
+        run: |
+          src_tag="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
+          git clone --depth 1 --branch "$src_tag" https://github.com/NousResearch/hermes-agent hermes-agent
+      - name: 通盘复核一章
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CHAPTER: ${{ matrix.chapter }}
+        run: |
+          PIN="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
+          OUT="review-${CHAPTER}.json"
+          prompt="$(CHAPTER="$CHAPTER" PIN="$PIN" OUT="$OUT" \
+            SCHEMA=.github/schemas/audit-review.json envsubst < .github/prompts/audit-review.md)"
+          claude -p "$prompt" --permission-mode acceptEdits \
+            --allowedTools "Read,Write,Bash(grep:*),Grep,Glob"
+      - uses: actions/upload-artifact@v4
+        with: { name: "review-${{ matrix.chapter }}", path: "review-*.json" }
+
+  finalize:
+    needs: [prep, review]
+    if: ${{ !cancelled() && needs.prep.result == 'success' && needs.prep.outputs.chapters != '[]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/download-artifact@v4
+        with: { path: rev, merge-multiple: true }
+      - run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.prep.outputs.issue }}
+        run: |
+          git config user.name hermes-audit-bot; git config user.email actions@github.com
+          PIN="$(grep '^tag=' .hermes-pin | cut -d= -f2)" \
+            bash .github/scripts/audit-finalize.sh rev '${{ needs.prep.outputs.chapters }}'
