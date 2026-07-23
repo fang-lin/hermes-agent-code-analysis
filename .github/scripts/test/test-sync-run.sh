@@ -23,11 +23,13 @@ trap 'rm -rf "$work" "$stub"' EXIT
 # work plan 经 ${PLAN_FILE} 文件交接后字节是否完整(Fix 1 的回归锁)。
 cat > "$stub/claude" <<'EOF'
 #!/usr/bin/env bash
+rev_idx=""
 for a in "$@"; do
   case "$a" in
     *"独立复核员"*)
       out=$(printf '%s\n' "$@" | grep -oE '[A-Za-z0-9_./-]+/review-[0-9]+\.json' | head -1)
       echo "{\"verdict\":\"${VERDICT:-pass}\",\"comments\":\"c\"}" > "$out"
+      rev_idx=$(printf '%s\n' "$out" | grep -oE '[0-9]+' | tail -1)
       ;;
     *"hermes-agent 文档的维护者"*)
       if [ -n "${SEEN_PLAN_OUT:-}" ]; then
@@ -39,7 +41,14 @@ for a in "$@"; do
 done
 # --output-format json 的桩:sync-run.sh 现在把 stdout 重定向到 cost 文件里,
 # 靠这条模拟真实 `claude -p --output-format json` 落地的 total_cost_usd 字段。
-echo '{"total_cost_usd":0.01}'
+# CORRUPT_REVIEWER=N 时,第 N 个复核 agent 这次调用故意吐半截 JSON(模拟被 CI
+# 超时/OOM 杀掉、留下截断文件),其余调用照常吐 0.01,用来验证聚合逻辑"一个坏
+# 文件不连累其它正常文件"(见 Case F)。
+if [ -n "${CORRUPT_REVIEWER:-}" ] && [ "$rev_idx" = "${CORRUPT_REVIEWER:-}" ]; then
+  printf '{"total_cost_usd":'
+else
+  echo '{"total_cost_usd":0.01}'
+fi
 exit 0
 EOF
 chmod +x "$stub/claude"
@@ -140,5 +149,23 @@ total_cost2="$(grep -oE 'TOTAL_COST=[0-9.]+' "$finalize_env" | cut -d= -f2)"
 [ -n "$layer_cost2" ] && [ -n "$total_cost2" ] || { echo "PRIOR_COST 用例应收到非空 LAYER_COST/TOTAL_COST"; cat "$finalize_env"; exit 1; }
 awk -v l="$layer_cost2" -v t="$total_cost2" 'BEGIN{d=t-(l+0.05); if (d<0) d=-d; exit !(d<0.001)}' \
   || { echo "TOTAL_COST 应约等于 本层($layer_cost2) + PRIOR_COST(0.05),实得 $total_cost2"; exit 1; }
+
+# Case F:cost 聚合的回归锁——某一份 cost 文件损坏(claude 被 CI 超时/OOM 杀掉、
+# 留下半截 JSON)不能连累其它正常文件。旧写法是 `find … -exec jq … {} +` 把所有
+# cost 文件一次性塞给一个 jq 进程,任何一份解析失败,jq 当场中断,连同批里正常
+# 文件的 total_cost_usd 也一起被丢掉(find 顺序不定,现象是非确定性地把花费清
+# 零/少算)。这里让第 1 个复核调用故意吐半截 JSON,改写 + 另外 2 个复核桩仍各
+# 正常吐 0.01——期望 LAYER_COST 是 3 个正常文件之和 ≈0.03,既不是 0,也没有被
+# 批处理连坐拖累。
+VERDICT=pass CORRUPT_REVIEWER=1 CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$work" \
+  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" FINALIZE_CMD="$stub/finalize" \
+  WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
+  bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
+rc=$?
+[ "$rc" -eq 0 ] || { echo "期望损坏 cost 文件场景仍一次过退出 0,实得 $rc"; exit 1; }
+layer_cost3="$(grep -oE 'LAYER_COST=[0-9.]+' "$finalize_env" | cut -d= -f2)"
+[ -n "$layer_cost3" ] || { echo "损坏文件场景应收到非空 LAYER_COST"; cat "$finalize_env"; exit 1; }
+awk -v c="$layer_cost3" 'BEGIN{d=c-0.03; if (d<0) d=-d; exit !(d<0.0001)}' \
+  || { echo "LAYER_COST 应是 3 个正常文件(改写+2 个复核)之和 ≈0.03(损坏的复核 1 cost 文件被跳过,不能连累其它文件),实得 $layer_cost3"; exit 1; }
 
 echo "test-sync-run: PASS"
