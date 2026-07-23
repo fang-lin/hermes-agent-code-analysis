@@ -7,6 +7,7 @@ on:
       cycle:        { type: string, required: true }   # sync | audit
       issue_number: { type: string, required: true }
       new_tag:      { type: string, required: false, default: "" }
+      prior_cost:   { type: string, required: false, default: "0" }
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: { required: true }
   workflow_dispatch:
@@ -15,6 +16,7 @@ on:
       cycle:        { type: string, required: true }   # sync | audit
       issue_number: { type: string, required: true }
       new_tag:      { type: string, required: false, default: "" }
+      prior_cost:   { type: string, required: false, default: "0" }
 
 permissions:
   contents: write
@@ -54,6 +56,7 @@ jobs:
           CYCLE: ${{ inputs.cycle }}
           ISSUE: ${{ inputs.issue_number }}
           NEW_TAG: ${{ inputs.new_tag }}
+          PRIOR_COST: ${{ inputs.prior_cost }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           git config user.name "hermes-sync-bot"

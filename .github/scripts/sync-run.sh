@@ -35,8 +35,8 @@ while [ "$round" -lt "$max" ]; do
 
   # a) 改写
   "$CLAUDE" -p "$(fill "$ROOT/.github/prompts/sync-rewrite.md" '')" \
-    --permission-mode acceptEdits \
-    --allowedTools "Read,Edit,Write,Bash(grep:*),Bash(rg:*),Grep,Glob" >/dev/null
+    --permission-mode acceptEdits --output-format json \
+    --allowedTools "Read,Edit,Write,Bash(grep:*),Bash(rg:*),Grep,Glob" > "$tmproot/cost-rw-$round.json"
 
   # b) 脚本硬检查
   if [ "$(policy_get "$POL" '.sync.script_checks_must_pass')" = "true" ]; then
@@ -49,7 +49,8 @@ while [ "$round" -lt "$max" ]; do
   rev="$tmproot/round-$round"; mkdir -p "$rev"
   for i in $(seq 1 "$n_rev"); do
     "$CLAUDE" -p "$(fill "$ROOT/.github/prompts/sync-review.md" "$rev/review-$i.json")" \
-      --permission-mode acceptEdits --allowedTools "Read,Write,Bash(grep:*),Grep,Glob" &
+      --permission-mode acceptEdits --output-format json \
+      --allowedTools "Read,Write,Bash(grep:*),Grep,Glob" > "$rev/cost-rev-$i.json" &
   done
   wait
 
@@ -66,6 +67,15 @@ if [ "$passed" != "1" ]; then
   } | "$GH" issue comment "$ISSUE" --body-file -
   exit 3
 fi
+
+# f) 汇总本次运行花了多少钱(尽力而为,绝不因解析失败而中断整个流程)
+# awk 的 printf "%.4f" 会按 LC_NUMERIC 输出小数点(某些 locale 下是逗号,比如
+# de_DE.UTF-8 -> "0,0000"),下游 jq/awk 数值比较全会炸——强制 LC_ALL=C 保证点号。
+layer_cost="$(find "$tmproot" -name 'cost-*.json' -exec jq -r '.total_cost_usd // empty' {} + 2>/dev/null | LC_ALL=C awk '{s+=$1} END{printf "%.4f", s+0}')"
+[ -z "$layer_cost" ] && layer_cost="0.0000"
+prior_cost="${PRIOR_COST:-0}"
+total_cost="$(LC_ALL=C awk -v a="$prior_cost" -v b="$layer_cost" 'BEGIN{printf "%.4f", a+b}')"
+export LAYER_COST="$layer_cost" TOTAL_COST="$total_cost"
 
 # bump pin(仅 sync,且 NEW_TAG 非空——防止空 tag 把 pin 文件清空)
 if should_bump_pin "$CYCLE" && [ -n "$NEW_TAG" ]; then

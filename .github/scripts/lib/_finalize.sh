@@ -27,7 +27,7 @@ kv="$(mktemp)"
   printf '触发=%s 同步(work plan)\n' "$cycle"
   printf '干了什么=改写 + %s 个复核 agent 逐条核回源码\n' "$revcount"
   printf '结论=复核全过,自动合并 PR\n'
-  printf 'token=见运行页\n'
+  printf 'token=本层 %s 美元 / 累计 %s 美元\n' "${LAYER_COST:-n/a}" "${TOTAL_COST:-n/a}"
 } > "$kv"
 body="$(mktemp)"
 {

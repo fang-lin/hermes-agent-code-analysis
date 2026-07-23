@@ -35,7 +35,7 @@ echo 'x' > "$work/docs/dummy.md"
 echo 'x' > "$work/.claude/skills/dummy.md"
 printf 'tag=vY\n' > "$work/.hermes-pin"
 
-GH_CMD="$stub/gh" REPO_ROOT="$work" \
+GH_CMD="$stub/gh" REPO_ROOT="$work" LAYER_COST="0.02" TOTAL_COST="0.07" \
   bash "$work/.github/scripts/lib/_finalize.sh" "$rev" "auto/x" "7" "sync" >/dev/null 2>&1 || true
 
 grep -q "gh pr create" "$log" || { echo "应调用 pr create"; exit 1; }
@@ -57,5 +57,7 @@ fi
 grep -q "^### \[③同步\] · " "$lastbody" || { echo "应贴 ③同步 标准记录(format_record 头,带 · 分隔)"; cat "$lastbody"; exit 1; }
 grep -q "^- 触发:sync 同步(work plan)$" "$lastbody" || { echo "标准记录应含'触发'行"; cat "$lastbody"; exit 1; }
 grep -q "^- 结论:复核全过,自动合并 PR$" "$lastbody" || { echo "标准记录应含'结论'行"; cat "$lastbody"; exit 1; }
+grep -q "本层 0.02" "$lastbody" || { echo "标准记录 token 行应含本层花费"; cat "$lastbody"; exit 1; }
+grep -q "累计 0.07" "$lastbody" || { echo "标准记录 token 行应含累计花费"; cat "$lastbody"; exit 1; }
 
 echo "test-finalize: PASS"

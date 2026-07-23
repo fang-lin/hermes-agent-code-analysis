@@ -37,6 +37,9 @@ for a in "$@"; do
       ;;
   esac
 done
+# --output-format json 的桩:sync-run.sh 现在把 stdout 重定向到 cost 文件里,
+# 靠这条模拟真实 `claude -p --output-format json` 落地的 total_cost_usd 字段。
+echo '{"total_cost_usd":0.01}'
 exit 0
 EOF
 chmod +x "$stub/claude"
@@ -63,8 +66,12 @@ printf '#!/usr/bin/env bash\nexit "${ORIENT_RC:-0}"\n' > "$stub/orient.sh"; chmo
 # _finalize 的桩:必须桩掉,不让真的 _finalize.sh 跑(它内部是裸 `git commit` +
 # `git push -u origin`)。REPO_ROOT 现已指向一次性仓,即便桩掉失败也推不到真远端,
 # 但仍然桩掉,保持这个测试只验证 sync-run.sh 自己的调用逻辑,不牵连 _finalize.sh。
+# 另记一份 LAYER_COST/TOTAL_COST 环境变量快照,供断言 sync-run.sh 算出的花费
+# 是否经 export 传到了 finalize 这一步。
 finalize_log="$stub/finalize-calls"
-printf '#!/usr/bin/env bash\necho "finalize $*" >> %q\nexit 0\n' "$finalize_log" > "$stub/finalize"
+finalize_env="$stub/finalize-env"
+printf '#!/usr/bin/env bash\necho "finalize $*" >> %q\necho "LAYER_COST=$LAYER_COST TOTAL_COST=$TOTAL_COST" > %q\nexit 0\n' \
+  "$finalize_log" "$finalize_env" > "$stub/finalize"
 chmod +x "$stub/finalize"
 
 # 一次过
@@ -75,6 +82,15 @@ VERDICT=pass CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$work" \
 rc=$?
 [ "$rc" -eq 0 ] || { echo "期望一次过退出 0,实得 $rc"; exit 1; }
 grep -q "finalize" "$finalize_log" 2>/dev/null || { echo "一次过应调用 finalize(桩)"; exit 1; }
+
+# LAYER_COST/TOTAL_COST 应经 export 传到 finalize,且都是 > 0 的数字
+# (改写 + 3 个复核桩各吐 0.01,合计 0.04;无 PRIOR_COST 时累计等于本层)。
+layer_cost="$(grep -oE 'LAYER_COST=[0-9.]+' "$finalize_env" | cut -d= -f2)"
+total_cost="$(grep -oE 'TOTAL_COST=[0-9.]+' "$finalize_env" | cut -d= -f2)"
+[ -n "$layer_cost" ] || { echo "finalize 应收到非空 LAYER_COST"; cat "$finalize_env"; exit 1; }
+[ -n "$total_cost" ] || { echo "finalize 应收到非空 TOTAL_COST"; cat "$finalize_env"; exit 1; }
+awk -v c="$layer_cost" 'BEGIN{exit !(c>0)}' || { echo "LAYER_COST 应 > 0,实得 $layer_cost"; exit 1; }
+awk -v c="$total_cost" 'BEGIN{exit !(c>0)}' || { echo "TOTAL_COST 应 > 0,实得 $total_cost"; exit 1; }
 
 # 轮数耗尽(复核恒 fail)
 VERDICT=fail CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$work" \
@@ -111,5 +127,18 @@ rc=$?
 [ -f "$seen_plan" ] || { echo "改写 agent 应看到落地的 plan 文件(seen-plan.json 未生成)"; exit 1; }
 expected_plan="$stub/expected-plan.json"; printf '%s' "$plan_with_pipe" > "$expected_plan"
 cmp -s "$seen_plan" "$expected_plan" || { echo "work plan 经文件交接后应与原始字节一致(含 |,不能被截断)"; exit 1; }
+
+# Case E:PRIOR_COST 应累加进 TOTAL_COST(累计 = 上游传入的 prior_cost + 本层)。
+VERDICT=pass PRIOR_COST=0.05 CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$work" \
+  CHECK_ANCHORS_CMD="$stub/check-anchors.sh" ORIENT_CMD="$stub/orient.sh" FINALIZE_CMD="$stub/finalize" \
+  WORK_PLAN='[]' CYCLE=sync ISSUE=1 NEW_TAG=vX PIN=vY RUN_URL=u \
+  bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
+rc=$?
+[ "$rc" -eq 0 ] || { echo "期望 PRIOR_COST 用例一次过退出 0,实得 $rc"; exit 1; }
+layer_cost2="$(grep -oE 'LAYER_COST=[0-9.]+' "$finalize_env" | cut -d= -f2)"
+total_cost2="$(grep -oE 'TOTAL_COST=[0-9.]+' "$finalize_env" | cut -d= -f2)"
+[ -n "$layer_cost2" ] && [ -n "$total_cost2" ] || { echo "PRIOR_COST 用例应收到非空 LAYER_COST/TOTAL_COST"; cat "$finalize_env"; exit 1; }
+awk -v l="$layer_cost2" -v t="$total_cost2" 'BEGIN{d=t-(l+0.05); if (d<0) d=-d; exit !(d<0.001)}' \
+  || { echo "TOTAL_COST 应约等于 本层($layer_cost2) + PRIOR_COST(0.05),实得 $total_cost2"; exit 1; }
 
 echo "test-sync-run: PASS"
