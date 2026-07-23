@@ -10,6 +10,7 @@ source "$ROOT/.github/scripts/lib/policy.sh"
 source "$ROOT/.github/scripts/lib/aggregate.sh"
 source "$ROOT/.github/scripts/lib/decide.sh"
 source "$ROOT/.github/scripts/lib/issue.sh"
+source "$ROOT/.github/scripts/lib/cost.sh"
 POL="$ROOT/.github/sync-policy.yml"
 
 # 0) 总开关
@@ -68,17 +69,10 @@ if [ "$passed" != "1" ]; then
   exit 3
 fi
 
-# f) 汇总本次运行花了多少钱(尽力而为,绝不因解析失败而中断整个流程)
-# awk 的 printf "%.4f" 会按 LC_NUMERIC 输出小数点(某些 locale 下是逗号,比如
-# de_DE.UTF-8 -> "0,0000"),下游 jq/awk 数值比较全会炸——强制 LC_ALL=C 保证点号。
-# 逐文件累加 cost(不用 find -exec {} + 批处理:某个文件损坏时 jq 会中断、
-# 连同后面正常文件的数据一起丢掉。改成一个一个读,坏的跳过,好的照常计入)。
-layer_cost="0.0000"
-while IFS= read -r f; do
-  v="$(jq -r '.total_cost_usd // empty' "$f" 2>/dev/null)"
-  case "$v" in ''|*[!0-9.]*) continue ;; esac   # 空或非数字(损坏)→ 跳过这个文件
-  layer_cost="$(LC_ALL=C awk -v a="$layer_cost" -v b="$v" 'BEGIN{printf "%.4f", a+b}')"
-done < <(find "$tmproot" -name 'cost-*.json' 2>/dev/null)
+# f) 汇总本次运行花了多少钱(尽力而为,绝不因解析失败而中断整个流程)——
+# 求和逻辑(逐文件累加、坏文件不连坐、LC_ALL=C 防 locale 把小数点变逗号)抽到
+# lib/cost.sh 的 sum_cost_usd,这里只调用。
+layer_cost="$(sum_cost_usd "$tmproot")"
 prior_cost="${PRIOR_COST:-0}"
 total_cost="$(LC_ALL=C awk -v a="$prior_cost" -v b="$layer_cost" 'BEGIN{printf "%.4f", a+b}')"
 export LAYER_COST="$layer_cost" TOTAL_COST="$total_cost"

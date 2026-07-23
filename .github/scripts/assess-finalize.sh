@@ -6,6 +6,7 @@ CLAUDE="${CLAUDE_CMD:-claude}"; GH="${GH_CMD:-gh}"
 source "$ROOT/.github/scripts/lib/assess-agg.sh"
 source "$ROOT/.github/scripts/lib/policy.sh"
 source "$ROOT/.github/scripts/lib/issue.sh"
+source "$ROOT/.github/scripts/lib/cost.sh"
 
 # 0) 总开关(kill-switch):sync-policy.yml enabled:false 时②整体跳过——不关闭、不派发
 POLICY_FILE="${POLICY_FILE:-$ROOT/.github/sync-policy.yml}"
@@ -65,6 +66,11 @@ case "$route" in
   *)               route_label="$route" ;;
 esac
 
+# 3.6) 本层花了多少钱(尽力而为,cost-*.json 缺失/损坏时按 0 算,不影响流程)——
+# download-artifact merge-multiple 把每个 matrix 分支的 cost-<region>.json 和
+# region-<region>.json 拍平进同一个 $dir,跟 sum_cost_usd 求 region 时同目录扫。
+layer_cost="$(sum_cost_usd "$dir")"
+
 # 4) 贴 issue 标准记录(人可读)+ work plan 折叠块(有条目才贴)
 regions=""
 for f in "$dir"/region-*.json; do
@@ -80,7 +86,7 @@ kv="$(mktemp)"
   printf '复杂度=%s\n' "$overall"
   printf '挑错=overturned=%s\n' "$overturned"
   printf '去向=%s\n' "$route_label"
-  printf 'token=见运行页\n'
+  printf 'token=本层 %s 美元 / 累计 %s 美元\n' "$layer_cost" "$layer_cost"
 } > "$kv"
 body="$(mktemp)"
 {
@@ -110,7 +116,8 @@ case "$route" in
   proceed|proceed_flagged)
     [ "$route" = proceed_flagged ] && "$GH" issue edit "$ISSUE" --add-label "flagged:待抽查"
     "$GH" workflow run hermes-sync.yml \
-      -f work_plan="$work" -f cycle=sync -f issue_number="$ISSUE" -f new_tag="$NEW_TAG" ;;
+      -f work_plan="$work" -f cycle=sync -f issue_number="$ISSUE" -f new_tag="$NEW_TAG" \
+      -f prior_cost="$layer_cost" ;;
   handoff)
     "$GH" label create "本地处理" --color D93F0B 2>/dev/null || true
     "$GH" issue edit "$ISSUE" --add-label "本地处理" \

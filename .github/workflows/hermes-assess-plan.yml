@@ -56,10 +56,14 @@ jobs:
           prompt="$(REGION="$REGION" FILES="$FILES" PIN="$PIN" NEW_TAG="$NEW_TAG" \
             OUT="$OUT" SCHEMA=.github/schemas/region-assessment.json \
             envsubst < .github/prompts/assess-region.md)"
-          claude -p "$prompt" --permission-mode acceptEdits \
-            --allowedTools "Read,Write,Bash(grep:*),Grep,Glob"
+          claude -p "$prompt" --permission-mode acceptEdits --output-format json \
+            --allowedTools "Read,Write,Bash(grep:*),Grep,Glob" > "cost-${REGION}.json"
       - uses: actions/upload-artifact@v4
-        with: { name: "region-${{ matrix.region.region }}", path: "region-*.json" }
+        with:
+          name: "region-${{ matrix.region.region }}"
+          path: |
+            region-*.json
+            cost-*.json
 
   finalize:
     needs: [prep, assess]

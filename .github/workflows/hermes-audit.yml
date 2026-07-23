@@ -57,10 +57,14 @@ jobs:
           OUT="review-${CHAPTER}.json"
           prompt="$(CHAPTER="$CHAPTER" PIN="$PIN" OUT="$OUT" \
             SCHEMA=.github/schemas/audit-review.json envsubst < .github/prompts/audit-review.md)"
-          claude -p "$prompt" --permission-mode acceptEdits \
-            --allowedTools "Read,Write,Bash(grep:*),Grep,Glob"
+          claude -p "$prompt" --permission-mode acceptEdits --output-format json \
+            --allowedTools "Read,Write,Bash(grep:*),Grep,Glob" > "cost-${CHAPTER}.json"
       - uses: actions/upload-artifact@v4
-        with: { name: "review-${{ matrix.chapter }}", path: "review-*.json" }
+        with:
+          name: "review-${{ matrix.chapter }}"
+          path: |
+            review-*.json
+            cost-*.json
 
   finalize:
     needs: [prep, review]
