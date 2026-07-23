@@ -41,4 +41,40 @@ assess:
 EOF
 assert_eq "no"  "$(should_handoff deep 3 "$pol2")"     "on_deep=false 时 deep 也不自动交"
 
+# plan_items_over=0 → 条目数闸关闭,再大的 count 也不交
+pol3="$tmp/policy-zero.yml"
+cat > "$pol3" <<'EOF'
+assess:
+  handoff:
+    on_deep: false
+    plan_items_over: 0
+    assignee: fang-lin
+EOF
+assert_eq "no"  "$(should_handoff shallow 100 "$pol3")" "plan_items_over=0=闸关闭"
+
+# plan_items_over 缺省(不写这个键)→ policy_get 应返回空 → 闸关闭
+pol4="$tmp/policy-blank.yml"
+cat > "$pol4" <<'EOF'
+assess:
+  handoff:
+    on_deep: false
+    assignee: fang-lin
+EOF
+assert_eq "no"  "$(should_handoff shallow 100 "$pol4")" "plan_items_over 缺省=闸关闭"
+
+# plan_items_over 非数字(配置打错)→ 闸忽略,不崩溃、不误放行,且往 stderr 告警而非静默
+pol5="$tmp/policy-garbage.yml"
+cat > "$pol5" <<'EOF'
+assess:
+  handoff:
+    on_deep: false
+    plan_items_over: abc
+    assignee: fang-lin
+EOF
+err5="$tmp/err5"
+out5="$(should_handoff shallow 100 "$pol5" 2>"$err5")"
+assert_eq "no" "$out5" "plan_items_over 非数字=闸忽略非崩溃"
+grep -q "integer expected" "$err5" && { echo "ASSERT FAIL: 非数字阈值不该触发 [: integer expected"; cat "$err5"; exit 1; }
+grep -q "plan_items_over 非数字" "$err5" || { echo "ASSERT FAIL: 非数字阈值应告警到 stderr"; cat "$err5"; exit 1; }
+
 echo "test-assess-agg: PASS"

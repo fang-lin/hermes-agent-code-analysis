@@ -35,7 +35,15 @@ should_handoff() {
   on_deep="$(policy_get "$pol" '.assess.handoff.on_deep')"
   over="$(policy_get "$pol" '.assess.handoff.plan_items_over')"
   if [ "$on_deep" = "true" ] && [ "$overall" = "deep" ]; then echo yes; return; fi
-  # over 为空或 0 时关闭这条;非零且 count 超过则交本地
-  if [ -n "$over" ] && [ "$over" != "0" ] && [ "$count" -gt "$over" ]; then echo yes; return; fi
+  # 只有当 over 是正整数时才启用条目数闸;非数字(配置打错)时关闭并告警,不静默放行
+  case "$over" in
+    ''|0) : ;;                         # 空或 0 = 关闭这条闸
+    *[!0-9]*) echo "assess-agg: plan_items_over 非数字('$over'),条目数闸已忽略" >&2 ;;
+    *)
+      case "$count" in
+        ''|*[!0-9]*) echo "assess-agg: count 非数字('$count')" >&2 ;;
+        *) [ "$count" -gt "$over" ] && { echo yes; return; } ;;
+      esac ;;
+  esac
   echo no
 }
