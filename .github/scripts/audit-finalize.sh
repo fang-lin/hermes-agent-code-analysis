@@ -5,6 +5,7 @@ ROOT="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 GH="${GH_CMD:-gh}"
 source "$ROOT/.github/scripts/lib/ledger.sh"
 source "$ROOT/.github/scripts/lib/policy.sh"
+source "$ROOT/.github/scripts/lib/issue.sh"
 
 # 0) 总开关(kill-switch):sync-policy 顶层关掉,或复核这一环(audit)自己关掉,
 #    都不该跑 audit-finalize——什么都不派、什么都不盖章。
@@ -20,13 +21,38 @@ LEDGER="$ROOT/audit-ledger.json"; DOCS="$ROOT/docs/zh"
 work="$(jq -sc '[.[].errors[]?]' "$rev"/review-*.json)"
 n="$(jq 'length' <<<"$work")"
 
-# 2) 有错 → 调 ③(audit,不动 pin)
+# 2) 贴标准记录(人可读,有错时附"查出的错"折叠块),再决定要不要调 ③(audit,不动 pin)
+chapter_count="$(jq 'length' <<<"$chapters")"
+reviewed_count=0
+for f in "$rev"/review-*.json; do [ -e "$f" ] || continue; reviewed_count=$((reviewed_count+1)); done
+
+kv="$(mktemp)"
+{
+  printf '触发=每周复核(%s 章)\n' "$chapter_count"
+  printf '干了什么=%s 章通盘复核\n' "$reviewed_count"
+  if [ "$n" -gt 0 ]; then
+    printf '结论=查出 %s 处错,已派 ③ 出纠错 PR\n' "$n"
+  else
+    printf '结论=未查出错\n'
+  fi
+} > "$kv"
+body="$(mktemp)"
+{
+  format_record "复核循环" "${RUN_URL:-}" "$kv"
+  if [ "$n" -gt 0 ]; then
+    errs_readable="$(mktemp)"
+    jq -r '.[] | "- \(.["位置"]):「\(.["现状"])」→「\(.["改成什么"])」(\(.["类型"]),依据 \(.["源码依据"]))"' <<<"$work" \
+      > "$errs_readable"
+    format_details "查出的错(${n} 处)" "$errs_readable"
+    rm -f "$errs_readable"
+  fi
+} > "$body"
+"$GH" issue comment "$ISSUE" --body-file "$body"
+rm -f "$kv" "$body"
+
 if [ "$n" -gt 0 ]; then
   "$GH" workflow run hermes-sync.yml \
     -f work_plan="$work" -f cycle=audit -f issue_number="$ISSUE" -f new_tag=""
-  "$GH" issue comment "$ISSUE" --body "复核查出 $n 处错,已派 ③ 出纠错 PR"
-else
-  "$GH" issue comment "$ISSUE" --body "本轮复核未查出错"
 fi
 
 # 3) 逐章盖章(pass)——只盖真有复核结果的章。matrix 某一腿崩了、没落下

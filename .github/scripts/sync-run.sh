@@ -60,8 +60,10 @@ done
 
 # e) 收尾
 if [ "$passed" != "1" ]; then
-  printf '%s\n' "### [③同步] 轮数($max)耗尽仍未通过,交人处理" \
-    | "$GH" issue comment "$ISSUE" --body-file -
+  {
+    printf '### [③同步] · %s\n' "${RUN_URL:-}"
+    printf -- '- 结论:改写↔复核 %s 轮耗尽仍未通过,交人处理\n' "$max"
+  } | "$GH" issue comment "$ISSUE" --body-file -
   exit 3
 fi
 

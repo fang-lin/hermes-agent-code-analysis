@@ -40,7 +40,21 @@ done
 exit 0
 EOF
 chmod +x "$stub/claude"
-printf '#!/usr/bin/env bash\nexit 0\n' > "$stub/gh"; chmod +x "$stub/gh"
+# gh 桩:除了照原样返回,还把 --body-file 内容(stdin '-' 或真文件路径)落到 lastbody,
+# 供"轮数耗尽"场景断言贴进 issue 的到底是不是标准记录格式。
+lastbody="$stub/last-body"
+cat > "$stub/gh" <<EOF
+#!/usr/bin/env bash
+prev=""
+for a in "\$@"; do
+  if [ "\$prev" = "--body-file" ]; then
+    if [ "\$a" = "-" ]; then cat > "$lastbody"; else cat "\$a" > "$lastbody" 2>/dev/null; fi
+  fi
+  prev="\$a"
+done
+exit 0
+EOF
+chmod +x "$stub/gh"
 
 # 脚本硬检查的桩:退出码由环境变量控制,默认都过。
 printf '#!/usr/bin/env bash\nexit "${ANCHORS_RC:-0}"\n' > "$stub/check-anchors.sh"; chmod +x "$stub/check-anchors.sh"
@@ -69,6 +83,8 @@ VERDICT=fail CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$work" \
   bash "$root/.github/scripts/sync-run.sh" >/dev/null 2>&1
 rc=$?
 [ "$rc" -eq 3 ] || { echo "期望耗尽退出 3,实得 $rc"; exit 1; }
+grep -q "^### \[③同步\] · u$" "$lastbody" || { echo "轮数耗尽应贴 ③同步 标准记录(带 RUN_URL)"; cat "$lastbody"; exit 1; }
+grep -q "^- 结论:改写↔复核 3 轮耗尽仍未通过,交人处理$" "$lastbody" || { echo "轮数耗尽记录应含'结论'行"; cat "$lastbody"; exit 1; }
 
 # 硬检查门:orient 恒失败,即便复核恒过,也必须轮数耗尽退出 3
 # (Fix 1 之前 `! A && B` 只在 A 失败且 B 成功时才判定不过,B 失败时误判为过,

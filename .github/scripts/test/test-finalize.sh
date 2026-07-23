@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/../../.." && pwd)"
-stub="$(mktemp -d)"; log="$stub/calls"; trap 'rm -rf "$stub"' EXIT
+stub="$(mktemp -d)"; log="$stub/calls"; lastbody="$stub/last-body"; trap 'rm -rf "$stub"' EXIT
+# gh 桩:记调用(前两个词);pr create 回显 PR URL;并把 --body-file 内容(stdin '-' 或真文件路径)
+# 落到 lastbody,供断言 issue 正文里到底贴了什么。
 cat > "$stub/gh" <<EOF
 #!/usr/bin/env bash
-echo "gh \$1 \$2" >> "$log"; [ "\$1 \$2" = "pr create" ] && echo "https://pr/9"; exit 0
+echo "gh \$1 \$2" >> "$log"; [ "\$1 \$2" = "pr create" ] && echo "https://pr/9"
+prev=""
+for a in "\$@"; do
+  if [ "\$prev" = "--body-file" ]; then
+    if [ "\$a" = "-" ]; then cat > "$lastbody"; else cat "\$a" > "$lastbody" 2>/dev/null; fi
+  fi
+  prev="\$a"
+done
+exit 0
 EOF
 chmod +x "$stub/gh"
 rev="$stub/rev"; mkdir -p "$rev"
@@ -43,5 +53,9 @@ if ! { [ "$line_create" -lt "$line_comment" ] && [ "$line_comment" -lt "$line_me
   cat "$log"
   exit 1
 fi
+
+grep -q "^### \[③同步\] · " "$lastbody" || { echo "应贴 ③同步 标准记录(format_record 头,带 · 分隔)"; cat "$lastbody"; exit 1; }
+grep -q "^- 触发:sync 同步(work plan)$" "$lastbody" || { echo "标准记录应含'触发'行"; cat "$lastbody"; exit 1; }
+grep -q "^- 结论:复核全过,自动合并 PR$" "$lastbody" || { echo "标准记录应含'结论'行"; cat "$lastbody"; exit 1; }
 
 echo "test-finalize: PASS"

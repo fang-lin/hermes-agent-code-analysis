@@ -80,4 +80,5 @@ jobs:
           ISSUE: ${{ inputs.issue_number }}
           NEW_TAG: ${{ inputs.new_tag }}
           EXPECTED_REGIONS: ${{ needs.prep.outputs.region_count }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: bash .github/scripts/assess-finalize.sh regions

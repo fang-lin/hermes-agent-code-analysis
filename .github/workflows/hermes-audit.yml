@@ -77,6 +77,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ needs.prep.outputs.issue }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           git config user.name hermes-audit-bot; git config user.email actions@github.com
           PIN="$(grep '^tag=' .hermes-pin | cut -d= -f2)" \

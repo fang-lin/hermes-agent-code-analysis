@@ -13,12 +13,21 @@ unset GITHUB_RUN_ID
 base_branch="$(git -C "$root" branch --show-current)"
 base_status="$(git -C "$root" status --porcelain)"
 
-stub="$(mktemp -d)"; log="$stub/calls"; full="$stub/calls-full"; trap 'rm -rf "$stub"' EXIT
+stub="$(mktemp -d)"; log="$stub/calls"; full="$stub/calls-full"; lastbody="$stub/last-body"; trap 'rm -rf "$stub"' EXIT
+# gh 桩:除了记调用,还把 --body-file 内容(stdin '-' 或真文件路径)落到 lastbody,
+# 供断言"复核循环"标准记录是否真的贴进了 issue 正文。
 cat > "$stub/gh" <<EOF
 #!/usr/bin/env bash
 echo "gh \$1 \$2" >> "$log"
 printf 'gh %s\n' "\$*" >> "$full"
 [ "\$1 \$2" = "pr create" ] && echo "https://pr/1"
+prev=""
+for a in "\$@"; do
+  if [ "\$prev" = "--body-file" ]; then
+    if [ "\$a" = "-" ]; then cat > "$lastbody"; else cat "\$a" > "$lastbody" 2>/dev/null; fi
+  fi
+  prev="\$a"
+done
 exit 0
 EOF
 chmod +x "$stub/gh"
@@ -26,7 +35,7 @@ chmod +x "$stub/gh"
 # 临时仓,带 ledger + srcmap + policy + libs + 一份"总开关开着"的 sync-policy
 work="$stub/repo"; mkdir -p "$work/.github/scripts/lib" "$work/docs/zh"
 cp "$root/.github/scripts/lib/ledger.sh" "$root/.github/scripts/lib/srcmap.sh" \
-   "$root/.github/scripts/lib/policy.sh" "$work/.github/scripts/lib/"
+   "$root/.github/scripts/lib/policy.sh" "$root/.github/scripts/lib/issue.sh" "$work/.github/scripts/lib/"
 cp "$root/.github/chapter-source-map.yml" "$work/.github/"
 cat > "$work/.github/sync-policy.yml" <<'EOF'
 enabled: true
@@ -48,6 +57,13 @@ GH_CMD="$stub/gh" REPO_ROOT="$work" ISSUE=1 PIN=vNow \
 
 # (a) 有错应派 ③
 grep -q "gh workflow run" "$log" || { echo "有错应派 ③"; exit 1; }
+
+# (a2) 有错时应贴"复核循环"标准记录(含折叠块列出查出的错),而不是原来的一句话
+grep -q "^### \[复核循环\] · " "$lastbody" || { echo "应贴 复核循环 标准记录(format_record 头,带 · 分隔)"; cat "$lastbody"; exit 1; }
+grep -q "^- 触发:每周复核(2 章)$" "$lastbody" || { echo "标准记录应含'触发'行(2 章=chapters 长度)"; cat "$lastbody"; exit 1; }
+grep -q "^- 干了什么:1 章通盘复核$" "$lastbody" || { echo "标准记录应含'干了什么'行(1 章=有复核结果的 review-*.json 数)"; cat "$lastbody"; exit 1; }
+grep -q "^- 结论:查出 1 处错,已派 ③ 出纠错 PR$" "$lastbody" || { echo "标准记录应含'结论'行"; cat "$lastbody"; exit 1; }
+grep -q "<summary>查出的错(1 处)</summary>" "$lastbody" || { echo "有错应有'查出的错'折叠块"; cat "$lastbody"; exit 1; }
 
 # (b) ledger 更新走 PR,不是直接推 main:既要看到 gh pr create,
 #     也要确认那个 ledger 提交真的没有落在 main 分支上。
