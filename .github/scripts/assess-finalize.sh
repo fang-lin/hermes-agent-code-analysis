@@ -48,6 +48,23 @@ overturned=$([ "$(jq -s 'any(.[]; .overturned)' "$cc"/*.json)" = "true" ] && ech
 overall="$(overall_complexity "$dir")"
 route="$(decide_route "$overall" "$has_changes" "$overturned" "$newchap")"
 
+# 3.5) 规模太大、Actions 扛不住时(deep 或改动条目太多),不派 ③,改交本地处理。
+# 只在本来要往下走(proceed/proceed_flagged)时才判断——close 不用管,已经没改动了。
+if [ "$route" = "proceed" ] || [ "$route" = "proceed_flagged" ]; then
+  if [ "$(should_handoff "$overall" "$n" "$POLICY_FILE")" = "yes" ]; then
+    route="handoff"
+  fi
+fi
+
+# 去向的人话版本,贴进标准记录——必须用最终定下的 route(含被 3.5 改写成 handoff 的情况)
+case "$route" in
+  close)           route_label="关闭(无影响)" ;;
+  proceed)         route_label="自动同步(派③)" ;;
+  proceed_flagged) route_label="自动同步(标记待抽查)" ;;
+  handoff)         route_label="交本地处理(assign 给人)" ;;
+  *)               route_label="$route" ;;
+esac
+
 # 4) 贴 issue 标准记录(人可读)+ work plan 折叠块(有条目才贴)
 regions=""
 for f in "$dir"/region-*.json; do
@@ -62,7 +79,7 @@ kv="$(mktemp)"
   printf '评估范围=%s\n' "$regions"
   printf '复杂度=%s\n' "$overall"
   printf '挑错=overturned=%s\n' "$overturned"
-  printf '去向=%s\n' "$route"
+  printf '去向=%s\n' "$route_label"
   printf 'token=见运行页\n'
 } > "$kv"
 body="$(mktemp)"
@@ -87,5 +104,10 @@ case "$route" in
     [ "$route" = proceed_flagged ] && "$GH" issue edit "$ISSUE" --add-label "flagged:待抽查"
     "$GH" workflow run hermes-sync.yml \
       -f work_plan="$work" -f cycle=sync -f issue_number="$ISSUE" -f new_tag="$NEW_TAG" ;;
+  handoff)
+    "$GH" label create "本地处理" --color D93F0B 2>/dev/null || true
+    "$GH" issue edit "$ISSUE" --add-label "本地处理" \
+      --add-assignee "$(policy_get "$POLICY_FILE" '.assess.handoff.assignee')"
+    "$GH" issue comment "$ISSUE" --body "本版规模较大(复杂度 ${overall},改动约 ${n} 处),Actions 扛不住(会超时/耗额度),已转本地处理并 assign。规划见上方 work plan。" ;;
   *) echo "assess-finalize: 未知 route=$route,中止" >&2; exit 1 ;;
 esac

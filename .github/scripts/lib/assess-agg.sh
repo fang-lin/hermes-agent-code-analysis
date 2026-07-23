@@ -25,3 +25,17 @@ decide_route() {
   fi
   echo "proceed"
 }
+
+# should_handoff <overall_complexity> <plan_items_count> <policy_file> —— 该不该交本地做?
+# 满足任一 → 回显 "yes";否则 "no"。读 sync-policy 的 assess.handoff。
+# 依赖 policy_get(lib/policy.sh):调用方需先 source 好那个文件。
+should_handoff() {
+  local overall="$1" count="$2" pol="$3"
+  local on_deep over
+  on_deep="$(policy_get "$pol" '.assess.handoff.on_deep')"
+  over="$(policy_get "$pol" '.assess.handoff.plan_items_over')"
+  if [ "$on_deep" = "true" ] && [ "$overall" = "deep" ]; then echo yes; return; fi
+  # over 为空或 0 时关闭这条;非零且 count 超过则交本地
+  if [ -n "$over" ] && [ "$over" != "0" ] && [ "$count" -gt "$over" ]; then echo yes; return; fi
+  echo no
+}

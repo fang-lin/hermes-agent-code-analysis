@@ -6,6 +6,12 @@ assess:
     - coverage_gap_new_chapter
     - confidence: low
 
+  # 规模太大、Actions 扛不住时,不派 ③,改为写清规划 + assign 给人本地做。
+  handoff:
+    on_deep: true          # 复杂度 deep 一律交本地(deep = 行为/架构变了,要重读源码)
+    plan_items_over: 15    # 或改动条目超过这个数也交本地(设 0 关闭这条)
+    assignee: fang-lin     # 交本地时把 issue assign 给谁(GitHub 登录名)
+
 sync:
   script_checks_must_pass: true
   reviewers: 3

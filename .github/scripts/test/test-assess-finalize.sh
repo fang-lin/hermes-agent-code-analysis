@@ -8,7 +8,7 @@ printf '#!/usr/bin/env bash\necho "{\\"overturned\\":false,\\"findings\\":[]}"\n
 # 落到 lastbody,供后面断言"贴进 issue 的正文里到底有什么"。
 cat > "$stub/gh" <<EOF
 #!/usr/bin/env bash
-echo "gh \$1 \$2" >> "$log"
+echo "gh \$*" >> "$log"
 prev=""
 for a in "\$@"; do
   if [ "\$prev" = "--body-file" ]; then
@@ -34,7 +34,7 @@ CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" ISSUE=1 NEW_TAG=vB
 grep -q "gh workflow run" "$log" || { echo "有改动应派发"; exit 1; }
 grep -q "^### \[②评估+规划\] · " "$lastbody" || { echo "应贴 ②评估+规划 标准记录(format_record 头,带 · 分隔)"; cat "$lastbody"; exit 1; }
 grep -q "^- 触发:评估上游 vB" "$lastbody" || { echo "标准记录应含'触发'行"; cat "$lastbody"; exit 1; }
-grep -q "^- 去向:proceed$" "$lastbody" || { echo "标准记录应含'去向'行"; cat "$lastbody"; exit 1; }
+grep -q "^- 去向:自动同步(派③)$" "$lastbody" || { echo "标准记录应含'去向'行"; cat "$lastbody"; exit 1; }
 
 # 场景C:proceed_flagged new-chapter → 既加标签又派发
 : > "$log"; d="$stub/c"; mkdir -p "$d"
@@ -55,4 +55,26 @@ rc=$?
 grep -q "gh issue close" "$log" && { echo "区域数不足不应 close"; exit 1; }
 grep -q "gh issue comment" "$log" || { echo "区域数不足应评论说明"; exit 1; }
 grep -q "gh issue edit" "$log" || { echo "区域数不足应加 flagged:待抽查 标签"; exit 1; }
+
+# 场景E:complexity=deep → 规模太大,交本地处理,不派 ③、不 close、要 assign
+: > "$log"; d="$stub/e"; mkdir -p "$d"
+echo '{"complexity":"deep","plan_items":[{"位置":"x","现状":"a","改成什么":"b","源码依据":"f:1","类型":"deep"}]}' > "$d/region-1.json"
+CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" ISSUE=1 NEW_TAG=vB \
+  bash "$root/.github/scripts/assess-finalize.sh" "$d" >/dev/null 2>&1
+grep -q "gh workflow run" "$log" && { echo "deep 应交本地,不该派发③"; exit 1; }
+grep -q "gh issue close" "$log" && { echo "deep 交本地不应 close"; exit 1; }
+grep -q -- "--add-assignee" "$log" || { echo "deep 交本地应 assign 给人"; cat "$log"; exit 1; }
+grep -q -- "--add-label 本地处理" "$log" || { echo "deep 交本地应打'本地处理'标签"; cat "$log"; exit 1; }
+grep -q "^- 去向:交本地处理(assign 给人)$" "$lastbody" || { echo "标准记录去向应显示交本地处理"; cat "$lastbody"; exit 1; }
+
+# 场景F:complexity=shallow 但 plan_items 超过阈值(15)→ 同样交本地
+: > "$log"; d="$stub/f"; mkdir -p "$d"
+items="$(for i in $(seq 1 16); do printf '{"位置":"x%d","现状":"a","改成什么":"b","源码依据":"f:1","类型":"shallow"},' "$i"; done)"
+echo "{\"complexity\":\"shallow\",\"plan_items\":[${items%,}]}" > "$d/region-1.json"
+CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" ISSUE=1 NEW_TAG=vB \
+  bash "$root/.github/scripts/assess-finalize.sh" "$d" >/dev/null 2>&1
+grep -q "gh workflow run" "$log" && { echo "条目超阈值应交本地,不该派发③"; exit 1; }
+grep -q "gh issue close" "$log" && { echo "条目超阈值交本地不应 close"; exit 1; }
+grep -q -- "--add-assignee" "$log" || { echo "条目超阈值交本地应 assign 给人"; cat "$log"; exit 1; }
+
 echo "test-assess-finalize: PASS"
