@@ -27,8 +27,9 @@ jobs:
           echo "chapters=$chapters" >> "$GITHUB_OUTPUT"
           if [ "$chapters" != "[]" ]; then
             gh label create audit-cycle --color 5319E7 2>/dev/null || true
-            n="$(gh issue create --title "audit: $(date -u +%F)" --label audit-cycle \
-                 --body "本轮复核:$chapters" --json number --jq .number 2>/dev/null || echo 0)"
+            issue_url="$(gh issue create --title "audit: $(date -u +%F)" --label audit-cycle \
+                 --body "本轮复核:$chapters")"
+            n="${issue_url##*/}"
             echo "issue=$n" >> "$GITHUB_OUTPUT"
           fi
 
