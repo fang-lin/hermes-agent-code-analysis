@@ -27,6 +27,7 @@ jobs:
         run: |
           tag="$(printf '%s' "$STATUS" | awk '{print $2}')"
           gh label create sync-cycle --color 0E8A16 2>/dev/null || true
-          issue="$(gh issue create --title "sync: $tag" --label sync-cycle \
-            --body "上游新版本 $tag,启动同步。" --json number --jq .number)"
+          issue_url="$(gh issue create --title "sync: $tag" --label sync-cycle \
+            --body "上游新版本 $tag,启动同步。")"
+          issue="${issue_url##*/}"
           gh workflow run hermes-assess-plan.yml -f new_tag="$tag" -f issue_number="$issue"

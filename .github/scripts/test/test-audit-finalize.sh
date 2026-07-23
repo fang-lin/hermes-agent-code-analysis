@@ -3,6 +3,11 @@ set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/../../.." && pwd)"
 source "$here/assert.sh"
 
+# audit-finalize.sh 的分支名带 ${GITHUB_RUN_ID:-local} 后缀;本测试断言的是
+# 精确分支名 auto/audit-ledger-local,在 CI 里 GITHUB_RUN_ID 已被设置,必须
+# 在此 unset 让分支名确定性地落回 -local,不依赖跑这个测试时外部环境有没有设它。
+unset GITHUB_RUN_ID
+
 # 真仓基线:跑完必须原样——脚本会在 REPO_ROOT 指向的仓里 checkout/commit/push,
 # 这里 REPO_ROOT 永远指向临时仓,真仓不该被 `git -C` 碰到分毫。
 base_branch="$(git -C "$root" branch --show-current)"
@@ -29,7 +34,9 @@ audit:
   enabled: true
 EOF
 echo '{}' > "$work/audit-ledger.json"; echo x > "$work/docs/zh/05-x.md"
-( cd "$work" && git init -q -b main && git add -A && git commit -q -m init )
+( cd "$work" && git init -q -b main )
+git -C "$work" config user.email ci@local && git -C "$work" config user.name ci
+( cd "$work" && git add -A && git commit -q -m init )
 main_branch="$(git -C "$work" branch --show-current)"
 
 rev="$stub/rev"; mkdir -p "$rev"

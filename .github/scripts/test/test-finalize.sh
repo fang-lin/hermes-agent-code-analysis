@@ -14,7 +14,9 @@ echo '{"verdict":"pass","comments":"逐条核对全属实"}' > "$rev/review-1.js
 work="$stub/repo"; mkdir -p "$work/.github/scripts/lib"
 cp "$root/.github/scripts/lib/issue.sh" "$work/.github/scripts/lib/"
 cp "$root/.github/scripts/lib/_finalize.sh" "$work/.github/scripts/lib/"
-( cd "$work" && git init -q && git commit -q --allow-empty -m init )
+( cd "$work" && git init -q )
+git -C "$work" config user.email ci@local && git -C "$work" config user.name ci
+( cd "$work" && git commit -q --allow-empty -m init )
 # 给一个待提交的改动,否则 _finalize 的防空提交门会跳过(不开 PR),后面的断言就落空。
 # 注:_finalize 里 `git add docs/ .claude/skills/ .hermes-pin` 是原子的 —— 只要有一个
 # pathspec 匹配不到文件,整条 add 就失败(rc=128)、什么都不 stage。所以三个路径都要造出来。
