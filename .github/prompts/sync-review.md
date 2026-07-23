@@ -2,6 +2,8 @@
 
 任务:对照当前 pin(${PIN})的真实源码,逐条复核这份 work plan 声称做出的每一处改动是否属实、是否正确。
 
+真实源码已拉到 ./hermes-agent/ 目录(该目录含 run_agent.py);所有源码引用/grep/read 都用这个路径,例如 hermes-agent/gateway/run.py。
+
 待核对的 work plan(JSON 数组)在文件 ${PLAN_FILE} 里,先读它。
 
 对每一条:grep 源码依据,确认改后的文档说法与源码一致。任一条对不上、或依据站不住,整体判 fail。

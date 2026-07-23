@@ -43,6 +43,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: curl -fsSL https://claude.ai/install.sh | bash; echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: 拉取被 pin 的 hermes-agent 源码
+        run: |
+          src_tag="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
+          git clone --depth 1 --branch "$src_tag" https://github.com/NousResearch/hermes-agent hermes-agent
       - name: 通盘复核一章
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

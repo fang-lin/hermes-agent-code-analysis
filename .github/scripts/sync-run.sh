@@ -40,7 +40,7 @@ while [ "$round" -lt "$max" ]; do
 
   # b) 脚本硬检查
   if [ "$(policy_get "$POL" '.sync.script_checks_must_pass')" = "true" ]; then
-    if ! bash "$CHECK_ANCHORS" || ! bash "$ORIENT"; then
+    if ! bash "$CHECK_ANCHORS" "$ROOT/hermes-agent" || ! bash "$ORIENT" "$ROOT/hermes-agent"; then
       echo "脚本硬检查未过,重来一轮"; continue
     fi
   fi

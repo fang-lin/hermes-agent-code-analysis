@@ -35,6 +35,17 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: 跑单测(自检)
         run: for t in .github/scripts/test/test-*.sh; do bash "$t"; done
+      - name: 拉取被 pin 的 hermes-agent 源码
+        env:
+          CYCLE: ${{ inputs.cycle }}
+          NEW_TAG: ${{ inputs.new_tag }}
+        run: |
+          if [ "$CYCLE" = "sync" ] && [ -n "$NEW_TAG" ]; then
+            src_tag="$NEW_TAG"
+          else
+            src_tag="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
+          fi
+          git clone --depth 1 --branch "$src_tag" https://github.com/NousResearch/hermes-agent hermes-agent
       - name: 同步
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
