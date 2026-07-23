@@ -92,6 +92,13 @@ body="$(mktemp)"
     format_details "本次 work plan(${n} 条)" "$plan_readable"
     rm -f "$plan_readable"
   fi
+  # 只在真会派 ③ 的去向(proceed/proceed_flagged)才贴机器原文——close/handoff 没派发,没什么可交接的。
+  if [ "$route" = "proceed" ] || [ "$route" = "proceed_flagged" ]; then
+    handoff_raw="$(mktemp)"
+    { printf '```json\n'; printf '%s\n' "$work"; printf '```\n'; } > "$handoff_raw"
+    format_details "交给 ③ 的输入(work_plan 机器原文)" "$handoff_raw"
+    rm -f "$handoff_raw"
+  fi
 } > "$body"
 "$GH" issue comment "$ISSUE" --body-file "$body"
 rm -f "$kv" "$body"

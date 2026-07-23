@@ -65,6 +65,10 @@ grep -q "^- 干了什么:1 章通盘复核$" "$lastbody" || { echo "标准记录
 grep -q "^- 结论:查出 1 处错,已派 ③ 出纠错 PR$" "$lastbody" || { echo "标准记录应含'结论'行"; cat "$lastbody"; exit 1; }
 grep -q "<summary>查出的错(1 处)</summary>" "$lastbody" || { echo "有错应有'查出的错'折叠块"; cat "$lastbody"; exit 1; }
 
+# (a3) 有错时还应贴一份交给③的机器原文(work_plan 原始 JSON,可审计)
+grep -q "交给 ③ 的输入" "$lastbody" || { echo "派③应带 work_plan 机器原文折叠块"; cat "$lastbody"; exit 1; }
+grep -q '"源码依据":"f:1"' "$lastbody" || { echo "机器原文折叠块应含 work_plan 原始字段值"; cat "$lastbody"; exit 1; }
+
 # (b) ledger 更新走 PR,不是直接推 main:既要看到 gh pr create,
 #     也要确认那个 ledger 提交真的没有落在 main 分支上。
 grep -q "gh pr create" "$log" || { echo "ledger 应走 PR"; exit 1; }

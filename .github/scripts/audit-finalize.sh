@@ -45,6 +45,11 @@ body="$(mktemp)"
       > "$errs_readable"
     format_details "查出的错(${n} 处)" "$errs_readable"
     rm -f "$errs_readable"
+    # n>0 才会往下派 ③(见下方),贴一份交给它的机器原文,留痕可审计。
+    handoff_raw="$(mktemp)"
+    { printf '```json\n'; printf '%s\n' "$work"; printf '```\n'; } > "$handoff_raw"
+    format_details "交给 ③ 的输入(work_plan 机器原文)" "$handoff_raw"
+    rm -f "$handoff_raw"
   fi
 } > "$body"
 "$GH" issue comment "$ISSUE" --body-file "$body"

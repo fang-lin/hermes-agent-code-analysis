@@ -25,6 +25,7 @@ d="$stub/a"; mkdir -p "$d"; echo '{"complexity":"none","plan_items":[]}' > "$d/r
 CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" ISSUE=1 NEW_TAG=vB \
   bash "$root/.github/scripts/assess-finalize.sh" "$d" >/dev/null 2>&1
 grep -q "gh issue close" "$log" || { echo "无改动应 close"; exit 1; }
+grep -q "交给 ③ 的输入" "$lastbody" && { echo "close 没派发,不该有 交给③的输入 折叠块"; cat "$lastbody"; exit 1; }
 
 # 场景B:shallow 有改动 → 派发 workflow run
 : > "$log"; d="$stub/b"; mkdir -p "$d"
@@ -35,6 +36,8 @@ grep -q "gh workflow run" "$log" || { echo "有改动应派发"; exit 1; }
 grep -q "^### \[②评估+规划\] · " "$lastbody" || { echo "应贴 ②评估+规划 标准记录(format_record 头,带 · 分隔)"; cat "$lastbody"; exit 1; }
 grep -q "^- 触发:评估上游 vB" "$lastbody" || { echo "标准记录应含'触发'行"; cat "$lastbody"; exit 1; }
 grep -q "^- 去向:自动同步(派③)$" "$lastbody" || { echo "标准记录应含'去向'行"; cat "$lastbody"; exit 1; }
+grep -q "交给 ③ 的输入" "$lastbody" || { echo "派③应带 work_plan 机器原文折叠块"; cat "$lastbody"; exit 1; }
+grep -q '"源码依据": "f:1"' "$lastbody" || { echo "机器原文折叠块应含 work_plan 原始字段值"; cat "$lastbody"; exit 1; }
 
 # 场景C:proceed_flagged new-chapter → 既加标签又派发
 : > "$log"; d="$stub/c"; mkdir -p "$d"
@@ -43,6 +46,7 @@ CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" ISSUE=1 NEW_TAG=vB
   bash "$root/.github/scripts/assess-finalize.sh" "$d" >/dev/null 2>&1
 grep -q "gh issue edit" "$log" || { echo "proceed_flagged应加标签"; exit 1; }
 grep -q "gh workflow run" "$log" || { echo "proceed_flagged应派发工作流"; exit 1; }
+grep -q "交给 ③ 的输入" "$lastbody" || { echo "proceed_flagged 也派③,应带机器原文折叠块"; cat "$lastbody"; exit 1; }
 
 # 场景D:EXPECTED_REGIONS 守卫——只到 1 个区域结果,但 prep 算出预期 2 个 →
 # 不能当"无影响"悄悄关闭,必须报错退出、评论 + 打标签转人工
@@ -78,6 +82,7 @@ grep -q "gh issue close" "$log" && { echo "deep 交本地不应 close"; exit 1; 
 grep -q -- "--add-assignee" "$log" || { echo "deep 交本地应 assign 给人"; cat "$log"; exit 1; }
 grep -q -- "--add-label 本地处理" "$log" || { echo "deep 交本地应打'本地处理'标签"; cat "$log"; exit 1; }
 grep -q "^- 去向:交本地处理(assign 给人)$" "$lastbody" || { echo "标准记录去向应显示交本地处理"; cat "$lastbody"; exit 1; }
+grep -q "交给 ③ 的输入" "$lastbody" && { echo "handoff 没派③,不该有 交给③的输入 折叠块"; cat "$lastbody"; exit 1; }
 
 # 场景F:complexity=shallow 但 plan_items 超过阈值(15)→ 同样交本地
 : > "$log"; d="$stub/f"; mkdir -p "$d"
@@ -88,5 +93,6 @@ CLAUDE_CMD="$stub/claude" GH_CMD="$stub/gh" REPO_ROOT="$root" ISSUE=1 NEW_TAG=vB
 grep -q "gh workflow run" "$log" && { echo "条目超阈值应交本地,不该派发③"; exit 1; }
 grep -q "gh issue close" "$log" && { echo "条目超阈值交本地不应 close"; exit 1; }
 grep -q -- "--add-assignee" "$log" || { echo "条目超阈值交本地应 assign 给人"; cat "$log"; exit 1; }
+grep -q "交给 ③ 的输入" "$lastbody" && { echo "handoff 没派③,不该有 交给③的输入 折叠块"; cat "$lastbody"; exit 1; }
 
 echo "test-assess-finalize: PASS"

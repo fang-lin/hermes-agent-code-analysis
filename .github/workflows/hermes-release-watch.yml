@@ -30,4 +30,6 @@ jobs:
           issue_url="$(gh issue create --title "sync: $tag" --label sync-cycle \
             --body "上游新版本 $tag,启动同步。")"
           issue="${issue_url##*/}"
+          pin="$(grep '^tag=' .hermes-pin | cut -d= -f2)"
+          gh issue comment "$issue" --body "$(printf '<details><summary>交给 ②评估+规划 的输入(机器原文)</summary>\n\n```\nnew_tag=%s\npin=%s\n```\n</details>\n' "$tag" "$pin")"
           gh workflow run hermes-assess-plan.yml -f new_tag="$tag" -f issue_number="$issue"
