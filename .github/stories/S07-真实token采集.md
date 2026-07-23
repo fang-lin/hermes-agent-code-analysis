@@ -2,7 +2,7 @@
 
 - **优先级**:P2
 - **规模**:中
-- **状态**:待做
+- **状态**:完成(A:③ / B:②+audit;累计靠 prior_cost 传递)
 - **依赖**:S01(记录框架已就位,现在 token 那行写的是"见运行页")
 
 ## 为什么
@@ -11,12 +11,12 @@ S01 把每层的标准记录做实了,但里面的 `token` 一行现在是占位
 
 ## 做什么
 
-- [ ] **本层用量**:跑 agent 的地方(③ 的 `sync-run.sh` 改写+复核;② 的 assess-region matrix 步;复核循环的 audit-review matrix 步)给 `claude -p` 加 `--output-format json`,从输出里取 `total_cost_usd` / `usage`(输入/输出 token)。
-  - 注意:`--output-format json` 只改 stdout 的形态,agent 该写的文件照写;改的时候务必跑单测确认改写/复核 agent 写文件的行为没坏。
-- [ ] **跨 matrix 汇总**:② 和复核循环的 agent 在各 matrix 分支里跑,用量得随 region-/review- 产出一起上传,finalize 里加总。
-- [ ] **累计**:"累计"要跨 ①→②→③ 三个独立运行。要么从这次 issue 里已有的记录累加,要么每层把累计值往下传。挑一个简单可靠的。
-- [ ] 把 `token=见运行页` 换成 `token=本层 <x> / 累计 <y>`。
-- [ ] 补测:能从桩的 JSON 输出里正确取到用量、加总。
+- [x] **本层用量**:③ 的 rewrite+复核在 `sync-run.sh` 里加 `--output-format json`、stdout 存 cost 文件、`sum_cost_usd` 加总。 ✅ f9514b4/7a9feff(A)
+- [x] **跨 matrix 汇总**:②/audit 的 agent 在 matrix 步加 `--output-format json`,cost 随 region-/review- artifact 一起上传,finalize 里 `sum_cost_usd` 加总。 ✅ 637c25e(B)
+- [x] **累计**:每层 dispatch 下一层时多传 `-f prior_cost=<本层累计>`;③ 收到后 累计 = prior + 本层。①免费、②/audit prior=0。 ✅
+- [x] 把 `token=见运行页` 换成 `token=本层 X 美元 / 累计 Y 美元`。 ✅
+- [x] 抽出 `lib/cost.sh` 的 `sum_cost_usd`(逐文件累加,坏文件跳过不连累正常文件),`test-cost.sh` 单测覆盖损坏场景。 ✅
+- [x] 尽力而为:cost 取不到/损坏 → 记 0,绝不改 exit code、绝不让流水线失败。 ✅(桩验证)
 
 ## 涉及文件
 
